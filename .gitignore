@@ -1,0 +1,31 @@
+# wyniki budowania
+build/
+dist/
+out/
+*.obj
+*.pdb
+*.ilk
+*.exe
+*.dll
+*.msi
+*.zip
+*.cer
+
+# Visual Studio / edytory
+*.user
+.vs/
+.vscode/
+.idea/
+
+# klucze i certyfikaty — nigdy w repozytorium
+*.pem
+*.pfx
+*.p12
+*.key
+
+# system
+.DS_Store
+Thumbs.db
+
+# inne
+*.bundle

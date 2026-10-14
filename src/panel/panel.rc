@@ -1,0 +1,41 @@
+#include "resource.h"
+#include <windows.h>
+
+IDI_APP     ICON "res/app.ico"
+IDI_OK      ICON "res/app-ok.ico"
+IDI_WARN    ICON "res/app-warn.ico"
+IDI_OFF     ICON "res/app-off.ico"
+IDI_COMPANY ICON "res/company.ico"
+IDI_APP_DARK ICON "res/app-dark.ico"
+
+// pliki z build\embed\ (katalog podany kompilatorowi zasobów przez /I w CMakeLists)
+IDR_KSP_X64 RCDATA "x64-cpsignbridge.dll"
+IDR_KSP_X86 RCDATA "x86-cpsignbridge.dll"
+IDR_RDP_X64 RCDATA "x64-cpsignbridge-rdp.dll"
+IDR_RDP_X86 RCDATA "x86-cpsignbridge-rdp.dll"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION SB_VERSION_NUM
+ PRODUCTVERSION SB_VERSION_NUM
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "041504B0"
+        BEGIN
+            VALUE "CompanyName", SB_COMPANY
+            VALUE "FileDescription", SB_APP_NAME
+            VALUE "FileVersion", SB_VERSION_STR
+            VALUE "InternalName", "sbpanel"
+            VALUE "OriginalFilename", "SignBridge Installer.exe"
+            VALUE "ProductName", SB_APP_NAME
+            VALUE "ProductVersion", SB_VERSION_STR
+            VALUE "LegalCopyright", "(c) 2026 Craftprojects Sp. z o.o."
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x415, 1200
+    END
+END

@@ -6,6 +6,10 @@ i wypakowują się przy instalacji. Po instalacji program nazywa się `SignBridg
 (serwer: `C:\Program Files\cp-signbridge\`, komputer: `%LOCALAPPDATA%\cp-signbridge\`) — instalator można
 potem skasować.
 
+> **Nazwa pliku:** instalator pobrany z [wydań na GitHubie](https://github.com/craftprojects-sp-zoo/cp-signbridge-official/releases/latest)
+> nazywa się `SignBridge.Installer.exe` (GitHub zamienia spację na kropkę); w ZIP z wydania i po zbudowaniu ze źródeł —
+> `SignBridge Installer.exe`. To ten sam program — w poleceniach poniżej użyj nazwy pliku, który masz.
+
 ## Instalacja
 
 Jeden instalator, jedna instalacja — **zawsze obie części** (dostawca podpisu dla serwera + wtyczka pulpitu

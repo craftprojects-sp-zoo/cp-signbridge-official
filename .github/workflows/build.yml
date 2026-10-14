@@ -1,0 +1,101 @@
+# SignBridge — budowanie na GitHub Actions (Windows, bez podpisu)
+# Build on GitHub Actions (Windows, unsigned)
+#
+# Wynik: artefakt "SignBridge-<sha>" z plikami dist\ (exe, msi) i SHA256SUMS.txt.
+# Pliki nie są podpisane (SB_SIGN_THUMBPRINT puste) i nie są bit-w-bit identyczne z wydaniami.
+# Zasady podpisywania: CODE_SIGNING_POLICY.md.
+#
+# Akcje przypięte do SHA commitów (komentarz = wersja). Brak sekretów, uprawnienia tylko do odczytu.
+
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.x
+
+      - name: WiX 5
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build (build.cmd, bez podpisu)
+        shell: cmd
+        env:
+          SB_SIGN_THUMBPRINT: ""
+        run: cmd /c build.cmd
+
+      - name: SHA256SUMS.txt
+        shell: pwsh
+        working-directory: dist
+        run: |
+          $files = @(Get-ChildItem -File -Filter *.exe) + @(Get-ChildItem -File -Filter *.msi)
+          if (-not ($files | Where-Object Extension -eq '.exe')) { throw 'Brak pliku .exe w dist\' }
+          if (-not ($files | Where-Object Extension -eq '.msi')) { throw 'Brak pliku .msi w dist\' }
+          $files | ForEach-Object {
+            '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          } | Set-Content -Path SHA256SUMS.txt -Encoding ascii
+          Get-Content SHA256SUMS.txt
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: SignBridge-${{ github.sha }}
+          path: |
+            dist/*.exe
+            dist/*.msi
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      # ------------------------------------------------------------------------------------------
+      # Podpis SignPath — NIEAKTYWNY, do włączenia po akceptacji wniosku przez SignPath Foundation.
+      # SignPath signing — INACTIVE, to be enabled once SignPath Foundation accepts the project.
+      #
+      # Do uzupełnienia / to fill in:
+      #   1. organization-id        — ID organizacji w SignPath (nie jest tajne),
+      #   2. project-slug           — np. "cp-signbridge-official" (projekt w SignPath powiązany z tym repo),
+      #   3. signing-policy-slug    — "release-signing" (certyfikat SignPath Foundation; ręczne zatwierdzanie
+      #                               każdego żądania przez Approvera — zob. CODE_SIGNING_POLICY.md),
+      #   4. sekret repozytorium SIGNPATH_API_TOKEN (Settings → Secrets → Actions; token użytkownika CI w SignPath),
+      #   5. krok upload-artifact powyżej musi mieć `id: upload` (artifact-configuration w SignPath: exe + msi),
+      #   6. uruchamiać tylko dla wydań (np. `if: github.event_name == 'workflow_dispatch'` lub tag v*), nie dla PR,
+      #   7. job potrzebuje dodatkowo `permissions: actions: read` (SignPath pobiera artefakt z tego przebiegu).
+      #
+      # - name: Podpis SignPath
+      #   if: github.event_name == 'workflow_dispatch'
+      #   uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
+      #   with:
+      #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+      #     organization-id: '<organization-id>'
+      #     project-slug: 'cp-signbridge-official'
+      #     signing-policy-slug: 'release-signing'
+      #     github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      #     wait-for-completion: true
+      #     wait-for-completion-timeout-in-seconds: 3600
+      #     output-artifact-directory: signed
+      # ------------------------------------------------------------------------------------------

@@ -3,6 +3,10 @@
 Jeden pakiet dla serwera pulpitu zdalnego i komputerów z kartą — instaluje zawsze obie części
 (dostawca podpisu + wtyczka pulpitu zdalnego) dla wszystkich użytkowników komputera. Wymaga uprawnień administratora.
 
+> **Nazwa pliku:** instalator pobrany z [wydań na GitHubie](https://github.com/craftprojects-sp-zoo/cp-signbridge-official/releases/latest)
+> nazywa się `SignBridge.Installer.exe` (GitHub zamienia spację na kropkę); w ZIP z wydania i po zbudowaniu ze źródeł —
+> `SignBridge Installer.exe`. To ten sam program — w poleceniach poniżej użyj nazwy pliku, który masz.
+
 ## Budowanie (Windows z Build Tools)
 
 ```

@@ -20,6 +20,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/craftprojects-sp-zoo/cp-signbridge-official/releases/latest"><b>Pobierz najnowszą wersję / Download the latest release</b></a>
+</p>
+
+<p align="center">
   <a href="#polski">Polski</a> · <a href="#english">English</a>
 </p>
 
@@ -81,13 +85,21 @@ Kanał działa w kliencie mstsc na Windows; inne klienty RDP (macOS, aplikacje p
 
 ## Instalacja
 
-Pobierz pliki z zakładki **[Releases](../../releases)** (wydanie 1.0.0):
+**[Pobierz najnowszą wersję](https://github.com/craftprojects-sp-zoo/cp-signbridge-official/releases/latest)**
+(wszystkie wydania: zakładka **[Releases](../../releases)**):
 
 | Plik | Zastosowanie |
 |---|---|
-| `SignBridge Installer.exe` | kreator instalacji — ten sam plik na serwer i na komputery z kartą |
-| `SignBridge-1.0.0.zip` | ten sam program spakowany (gdy przeglądarka lub poczta blokuje `.exe`) |
+| `SignBridge.Installer.exe` | kreator instalacji — ten sam plik na serwer i na komputery z kartą |
+| `SignBridge-1.0.0.zip` | ten sam program spakowany (gdy przeglądarka lub poczta blokuje `.exe`); w środku `SignBridge Installer.exe` |
 | `SignBridge.msi` | instalacja cicha przez GPO / Intune: `msiexec /i "SignBridge.msi" /qn` |
+| `Craftprojects-CodeSigning.cer` | publiczny certyfikat wydawcy (zob. weryfikacja, pkt 3) |
+| `SignBridge-1.0.0-zrodla.zip` | dokładnie te źródła, z których zbudowano wydanie |
+| `SHA256SUMS.txt` | sumy kontrolne SHA-256 powyższych plików |
+
+GitHub zamienia spację w nazwie pliku na kropkę, dlatego pobrany instalator nazywa się `SignBridge.Installer.exe`,
+a ten sam plik w ZIP i po zbudowaniu ze źródeł — `SignBridge Installer.exe`. To ten sam program; w poleceniach
+z [dokumentacji](docs/instruction-msi.md) użyj nazwy pliku, który masz.
 
 Szczegóły: [docs/PANEL.md](docs/PANEL.md) (instalacja i obsługa) oraz [docs/instruction-msi.md](docs/instruction-msi.md)
 (MSI i wiersz poleceń).
@@ -99,10 +111,10 @@ Przed uruchomieniem sprawdź, że plik pochodzi z tego wydania i nie został zmi
 **1. Suma SHA-256** — porównaj z plikiem `SHA256SUMS.txt` dołączonym do wydania (PowerShell):
 
 ```powershell
-Get-FileHash ".\SignBridge Installer.exe" -Algorithm SHA256
+Get-FileHash ".\SignBridge.Installer.exe" -Algorithm SHA256
 Get-FileHash ".\SignBridge.msi" -Algorithm SHA256
 # albo w CMD:
-certutil -hashfile "SignBridge Installer.exe" SHA256
+certutil -hashfile "SignBridge.Installer.exe" SHA256
 ```
 
 **2. Podpis Authenticode** — pliki wydania 1.0.0 są podpisane własnym certyfikatem firmy Craftprojects:
@@ -114,10 +126,10 @@ certutil -hashfile "SignBridge Installer.exe" SHA256
 | Ważny do | 2036-10-14 (znacznik czasu Certum) |
 
 ```powershell
-Get-AuthenticodeSignature ".\SignBridge Installer.exe" | Format-List Status, StatusMessage, SignerCertificate
-Get-AuthenticodeSignature ".\SignBridge.msi"           | Format-List Status, StatusMessage, SignerCertificate
+Get-AuthenticodeSignature ".\SignBridge.Installer.exe" | Format-List Status, StatusMessage, SignerCertificate
+Get-AuthenticodeSignature ".\SignBridge.msi"            | Format-List Status, StatusMessage, SignerCertificate
 # odcisk musi być równy 096EC851CB0D6BE8A30AC1CAC7BE85EFE060683B:
-(Get-AuthenticodeSignature ".\SignBridge Installer.exe").SignerCertificate.Thumbprint
+(Get-AuthenticodeSignature ".\SignBridge.Installer.exe").SignerCertificate.Thumbprint
 ```
 
 Można też kliknąć plik prawym przyciskiem → **Właściwości** → **Podpisy cyfrowe**.
@@ -140,7 +152,11 @@ i zgłoś to (zob. [SECURITY.md](SECURITY.md)).
 
 > Złożyliśmy wniosek do **SignPath Foundation** o bezpłatny certyfikat podpisu kodu dla projektów open source.
 > Jeśli zostanie przyjęty, przyszłe wydania mogą być podpisane ich certyfikatem (wydawca „SignPath Foundation”) —
-> sposób weryfikacji zostanie wtedy opisany w notach wydania.
+> sposób weryfikacji zostanie wtedy opisany w notach wydania. Zasady podpisywania (co jest podpisywane, kto zatwierdza
+> wydania, prywatność): **[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)**.
+
+Plik `SignBridge-1.0.0.zip` zawiera `SignBridge Installer.exe` — sprawdź sumę samego ZIP-a, a podpis i odcisk
+rozpakowanego pliku tak jak wyżej.
 
 ## Budowanie ze źródeł (Windows)
 
@@ -164,6 +180,11 @@ Build wymaga Windows (MSVC, Windows SDK, zasoby `.rc`); na macOS / Linux nie da 
    * `SignBridge.msi` (gdy zainstalowano WiX).
 
    Narzędzia diagnostyczne `sbctl.exe` i `sbagent.exe` zostają w `build\x64\`.
+
+   Ten sam build (bez podpisu) wykonuje automatycznie **GitHub Actions** ([.github/workflows/build.yml](.github/workflows/build.yml))
+   przy każdej zmianie na `main` i w pull requestach — pliki i `SHA256SUMS.txt` są w artefaktach przebiegu
+   (zakładka **Actions**). Nie są one wydaniem: są niepodpisane, a ich sumy różnią się od plików wydania
+   (build nie jest powtarzalny bit w bit, a pliki wydania są podpisane).
 5. *(Opcjonalnie)* podpis Authenticode własnym certyfikatem code-signing:
    ```
    rem odcisk SHA-1 certyfikatu z magazynu użytkownika (40 znaków hex)
@@ -264,17 +285,24 @@ The private key never leaves the card and the PIN is never transmitted or stored
 
 ### Install
 
-Download `SignBridge Installer.exe`, the ZIP or `SignBridge.msi` from the **[Releases](../../releases)** page and
-run the same installer on the server and on user PCs (`msiexec /i "SignBridge.msi" /qn` for silent deployment).
+**[Download the latest release](https://github.com/craftprojects-sp-zoo/cp-signbridge-official/releases/latest)**
+(all releases: **[Releases](../../releases)**): `SignBridge.Installer.exe`, the ZIP (`SignBridge-1.0.0.zip`, for when
+`.exe` downloads are blocked) or `SignBridge.msi`, plus `Craftprojects-CodeSigning.cer`, the exact build sources
+(`SignBridge-1.0.0-zrodla.zip`) and `SHA256SUMS.txt`. Run the same installer on the server and on user PCs
+(`msiexec /i "SignBridge.msi" /qn` for silent deployment).
+
+GitHub replaces the space in the file name with a dot, so the downloaded installer is `SignBridge.Installer.exe`,
+while the same file inside the ZIP and in a local build is `SignBridge Installer.exe`. Use the name of the file
+you have in the commands from the documentation.
 
 ### Verify a release download
 
 1. **SHA-256** — compare with `SHA256SUMS.txt` attached to the release:
-   `Get-FileHash ".\SignBridge Installer.exe" -Algorithm SHA256` (or `certutil -hashfile <file> SHA256`).
+   `Get-FileHash ".\SignBridge.Installer.exe" -Algorithm SHA256` (or `certutil -hashfile <file> SHA256`).
 2. **Authenticode** — release 1.0.0 is signed with Craftprojects' own code-signing certificate:
    publisher `CN=Craftprojects Sp. z o.o., O=Craftprojects Sp. z o.o., C=PL`, SHA-1 thumbprint
    `096EC851CB0D6BE8A30AC1CAC7BE85EFE060683B`, valid until 2036-10-14 (Certum timestamp). Check with
-   `Get-AuthenticodeSignature ".\SignBridge Installer.exe" | Format-List Status, SignerCertificate`
+   `Get-AuthenticodeSignature ".\SignBridge.Installer.exe" | Format-List Status, SignerCertificate`
    (or *Properties → Digital Signatures*).
 3. **Trust** — the certificate is not issued by a public CA, so on a PC that does not trust it Windows shows
    **"Unknown publisher"** and the status is `UnknownError` (the file is still signed and intact if the thumbprint
@@ -288,6 +316,10 @@ report it (see [SECURITY.md](SECURITY.md)).
 
 We have applied to the **SignPath Foundation** for a free open-source code-signing certificate. If accepted, future
 releases may be signed with their certificate (publisher "SignPath Foundation"); the release notes will say so.
+Signing rules (what is signed, who approves releases, privacy): **[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)**.
+
+`SignBridge-1.0.0.zip` contains `SignBridge Installer.exe` — check the hash of the ZIP itself, and the signature and
+thumbprint of the extracted file as above.
 
 ### Build from source (Windows only)
 
@@ -299,6 +331,11 @@ releases may be signed with their certificate (publisher "SignPath Foundation");
 4. Output in `dist\`: `SignBridge Installer.exe` and (with WiX) `SignBridge.msi`; diagnostic tools in `build\x64\`.
 5. *(Optional)* Authenticode signing: set `SB_SIGN_THUMBPRINT` (SHA-1 thumbprint of your code-signing certificate)
    and optionally `SB_SIGN_TIMESTAMP`, then run `build.cmd` — see `sign.cmd`.
+
+The same (unsigned) build runs on **GitHub Actions** ([.github/workflows/build.yml](.github/workflows/build.yml)) for
+every change on `main` and every pull request; the files and `SHA256SUMS.txt` are attached to the run as artifacts.
+They are not releases: they are unsigned and their hashes differ from the release files (the build is not
+bit-for-bit reproducible, and release files are signed).
 
 The build requires Windows (MSVC, Windows SDK, resource compiler); it cannot be run on macOS or Linux.
 

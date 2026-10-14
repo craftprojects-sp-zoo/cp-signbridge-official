@@ -10,11 +10,10 @@
 
 **Docelowo:** *Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).*
 
-> **Stan obecny (2026-10-14):** wniosek do SignPath Foundation czeka na rozpatrzenie. Do czasu akceptacji wydania
-> są podpisywane **własnym certyfikatem Craftprojects Sp. z o.o.** (odcisk SHA-1
+> **Stan obecny:** wydania są podpisywane **certyfikatem Craftprojects Sp. z o.o.** (odcisk SHA-1
 > `096EC851CB0D6BE8A30AC1CAC7BE85EFE060683B`) — sposób weryfikacji opisuje [README](README.md#weryfikacja-pobranej-paczki).
-> Od wydania podpisanego przez SignPath wydawcą w podpisie będzie „SignPath Foundation”; informacja o tym znajdzie
-> się w notach wydania.
+> W przyszłości możliwy jest podpis przez SignPath Foundation; wtedy wydawcą w podpisie będzie „SignPath Foundation”,
+> a informacja o tym znajdzie się w notach wydania.
 
 ### Co jest podpisywane
 
@@ -59,10 +58,10 @@ Nadużycia certyfikatu lub podejrzane pliki podpisane w imieniu SignBridge zgła
 
 **Target:** *Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).*
 
-> **Current state (2026-10-14):** our application to the SignPath Foundation is pending. Until it is accepted,
-> releases are signed with **Craftprojects Sp. z o.o.'s own certificate** (SHA-1 thumbprint
+> **Current state:** releases are signed with a **Craftprojects Sp. z o.o. certificate** (SHA-1 thumbprint
 > `096EC851CB0D6BE8A30AC1CAC7BE85EFE060683B`) — see [README](README.md#verify-a-release-download) for verification.
-> Releases signed via SignPath will show "SignPath Foundation" as the publisher; the release notes will say so.
+> Signing through the SignPath Foundation may become possible in the future; releases signed that way will show
+> "SignPath Foundation" as the publisher, and the release notes will say so.
 
 ### What is signed
 

@@ -150,10 +150,9 @@ który go nie zna, Windows pokaże **„Nieznany wydawca”**, a `Get-Authentico
 Jeśli suma się nie zgadza, odcisk jest inny albo stan to `HashMismatch` / `NotSigned` — nie uruchamiaj pliku
 i zgłoś to (zob. [SECURITY.md](SECURITY.md)).
 
-> Złożyliśmy wniosek do **SignPath Foundation** o bezpłatny certyfikat podpisu kodu dla projektów open source.
-> Jeśli zostanie przyjęty, przyszłe wydania mogą być podpisane ich certyfikatem (wydawca „SignPath Foundation”) —
-> sposób weryfikacji zostanie wtedy opisany w notach wydania. Zasady podpisywania (co jest podpisywane, kto zatwierdza
-> wydania, prywatność): **[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)**.
+> Wydania są podpisywane certyfikatem Craftprojects Sp. z o.o. W przyszłości możliwy jest podpis przez SignPath
+> Foundation — sposób weryfikacji zostanie wtedy opisany w notach wydania. Zasady podpisywania (co jest podpisywane,
+> kto zatwierdza wydania, prywatność): **[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)**.
 
 Plik `SignBridge-1.0.0.zip` zawiera `SignBridge Installer.exe` — sprawdź sumę samego ZIP-a, a podpis i odcisk
 rozpakowanego pliku tak jak wyżej.
@@ -314,9 +313,8 @@ you have in the commands from the documentation.
 If a check fails (hash mismatch, different thumbprint, `HashMismatch` / `NotSigned`), do not run the file and
 report it (see [SECURITY.md](SECURITY.md)).
 
-We have applied to the **SignPath Foundation** for a free open-source code-signing certificate. If accepted, future
-releases may be signed with their certificate (publisher "SignPath Foundation"); the release notes will say so.
-Signing rules (what is signed, who approves releases, privacy): **[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)**.
+Releases are signed with a Craftprojects Sp. z o.o. certificate. Signing through the SignPath Foundation may become
+possible in the future; the release notes will say so. Signing rules (what is signed, who approves releases, privacy): **[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)**.
 
 `SignBridge-1.0.0.zip` contains `SignBridge Installer.exe` — check the hash of the ZIP itself, and the signature and
 thumbprint of the extracted file as above.

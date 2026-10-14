@@ -8,7 +8,7 @@
 
 ### Podpis
 
-**Docelowo:** *Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).*
+**Docelowo (jeśli podpis przez SignPath zostanie uruchomiony):** *Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).*
 
 > **Stan obecny:** wydania są podpisywane **certyfikatem Craftprojects Sp. z o.o.** (odcisk SHA-1
 > `096EC851CB0D6BE8A30AC1CAC7BE85EFE060683B`) — sposób weryfikacji opisuje [README](README.md#weryfikacja-pobranej-paczki).
@@ -56,7 +56,7 @@ Nadużycia certyfikatu lub podejrzane pliki podpisane w imieniu SignBridge zgła
 
 ### Signing
 
-**Target:** *Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).*
+**Target (if signing through SignPath is enabled):** *Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).*
 
 > **Current state:** releases are signed with a **Craftprojects Sp. z o.o. certificate** (SHA-1 thumbprint
 > `096EC851CB0D6BE8A30AC1CAC7BE85EFE060683B`) — see [README](README.md#verify-a-release-download) for verification.

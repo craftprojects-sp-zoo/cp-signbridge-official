@@ -17,12 +17,17 @@
 #include <new>
 #include "../common/protocol.h"
 #include "../common/signer.h"
+#include "../common/slots.h"
 #include "../ksp/log.h"
 
 namespace {
 
 const char* const kChannelName = "CPSIGNBR";
 LONG g_objects = 0;
+// Najwyżej tyle żądań naraz (każde we własnym wątku, podpis może czekać na PIN) — zalew ramkami
+// z serwera nie utworzy setek wątków ani okien PIN
+const LONG kMaxParallelRequests = 4;
+sb::Slots g_requests(kMaxParallelRequests);
 
 std::wstring Who() {
     wchar_t host[256] = {}; DWORD n = 256; GetComputerNameW(host, &n);
@@ -83,6 +88,7 @@ private:
         uint16_t rtype = 0; std::vector<uint8_t> rpayload;
         sb::signer::HandleRequest(j->type, j->payload, NULL, L"rdp", rtype, rpayload);
         j->self->SendFrame(rtype, rpayload);
+        g_requests.Release();
         j->self->Release();
         delete j;
         return 0;
@@ -105,12 +111,17 @@ private:
             SendFrame(sb::proto::AUTH_OK, sb::proto::EncodeAuthOk(ok));
             return;
         }
+        if (!g_requests.TryAcquire()) {
+            SB_WARN(L"kanał: za dużo równoległych żądań — odrzucono");
+            sb::proto::Error e = { (uint32_t)HRESULT_FROM_WIN32(ERROR_BUSY), L"komputer z kartą obsługuje już inne żądania — spróbuj ponownie" };
+            SendFrame(sb::proto::ERR, sb::proto::EncodeError(e)); return;
+        }
         // Podpis może czekać na PIN — poza wątkiem mstsc
         Job* j = new (std::nothrow) Job{ this, type, payload };
-        if (!j) return;
+        if (!j) { g_requests.Release(); return; }
         AddRef();
         HANDLE t = CreateThread(NULL, 0, Worker, j, 0, NULL);
-        if (!t) { Release(); delete j; return; }
+        if (!t) { Release(); delete j; g_requests.Release(); return; }
         CloseHandle(t);
     }
 

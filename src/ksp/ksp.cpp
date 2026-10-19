@@ -88,7 +88,6 @@ void EnsureInit() {
 #endif
         SB_INFO(L"=== KSP załadowany: proces '%s', użytkownik '%s', sesja %lu, %s",
                 sb::ProcessName().c_str(), sb::UserName().c_str(), sb::SessionId(), arch);
-        SB_INFO(L"linia poleceń: %s", GetCommandLineW());
         g_backend = sb::CreateCompositeBackend();
         SB_INFO(L"backend: %s", g_backend->Name());
         g_initDone = true;
@@ -308,7 +307,7 @@ SECURITY_STATUS WINAPI KspGetKeyProperty(NCRYPT_PROV_HANDLE hProvider, NCRYPT_KE
         return OutBytes(pbOutput, cbOutput, pcbResult, &pol, sizeof(pol));
     }
     if (_wcsicmp(pszProperty, NCRYPT_WINDOW_HANDLE_PROPERTY) == 0) return OutBytes(pbOutput, cbOutput, pcbResult, &k->hwnd, sizeof(k->hwnd));
-    if (_wcsicmp(pszProperty, NCRYPT_IMPL_TYPE_PROPERTY) == 0) return OutDword(pbOutput, cbOutput, pcbResult, k->prov->backend->ImplType());
+    if (_wcsicmp(pszProperty, NCRYPT_IMPL_TYPE_PROPERTY) == 0) return OutDword(pbOutput, cbOutput, pcbResult, k->prov->backend->KeyImplType(k->name));
     if (_wcsicmp(pszProperty, NCRYPT_CERTIFICATE_PROPERTY) == 0) return NTE_NOT_FOUND;
     if (_wcsicmp(pszProperty, NCRYPT_SECURITY_DESCR_PROPERTY) == 0) return NTE_NOT_SUPPORTED;
     if (_wcsicmp(pszProperty, NCRYPT_SMARTCARD_GUID_PROPERTY) == 0) return NTE_NOT_FOUND;

@@ -69,24 +69,26 @@ private:
 };
 
 // --- parsowanie z kontrolą granic ---
+// Granice liczone jako „ile zostało” (n_ - i_), nie i_ + n: na x86 size_t ma 32 bity
+// i suma z długością z ramki (do 0xFFFFFFFF) mogłaby się zawinąć.
 class Reader {
 public:
     Reader(const uint8_t* p, size_t n) : p_(p), n_(n), i_(0), ok_(true) {}
     bool ok() const { return ok_; }
-    uint8_t u8() { if (i_ + 1 > n_) { ok_ = false; return 0; } return p_[i_++]; }
+    uint8_t u8() { if (n_ - i_ < 1) { ok_ = false; return 0; } return p_[i_++]; }
     uint32_t u32() {
-        if (i_ + 4 > n_) { ok_ = false; return 0; }
+        if (n_ - i_ < 4) { ok_ = false; return 0; }
         uint32_t v = 0; for (int k = 0; k < 4; ++k) v |= (uint32_t)p_[i_ + k] << (8 * k);
         i_ += 4; return v;
     }
     std::vector<uint8_t> bytes() {
         uint32_t n = u32();
-        if (!ok_ || i_ + n > n_) { ok_ = false; return {}; }
+        if (!ok_ || n > n_ - i_) { ok_ = false; return {}; }
         std::vector<uint8_t> v(p_ + i_, p_ + i_ + n); i_ += n; return v;
     }
     std::wstring wstr() {
         uint32_t n = u32();
-        if (!ok_ || i_ + (size_t)n * 2 > n_) { ok_ = false; return L""; }
+        if (!ok_ || n > (n_ - i_) / 2) { ok_ = false; return L""; }
         std::wstring s; s.reserve(n);
         for (uint32_t k = 0; k < n; ++k) { s.push_back((wchar_t)(p_[i_] | (p_[i_ + 1] << 8))); i_ += 2; }
         return s;

@@ -2,7 +2,8 @@
 // cp-signbridge — interfejs backendu klucza
 //
 // KSP (ksp.cpp) nie wie, gdzie fizycznie jest klucz. Rozmawia z backendem przez ten interfejs.
-//   Etap 0 (sonda):   backend_softkey  — klucz RSA w pliku, podpis lokalnie przez BCrypt
+//   Etap 0 (sonda):   backend_softkey  — klucz RSA w pliku, podpis lokalnie przez BCrypt; tylko w buildzie
+//                                        z -DSB_ENABLE_SOFTKEY=ON (diagnostyka), nigdy w wydaniu
 //   Etap 1+ (mostek): backend_remote   — skrót leci kanałem wirtualnym RDP do wtyczki mstsc na
 //                                        komputerze użytkownika, a wraca gotowy podpis z prawdziwej karty
 // Dzięki temu zamiana sondy na mostek nie dotyka kodu KSP.
@@ -73,13 +74,18 @@ public:
 
     virtual SECURITY_STATUS Enumerate(std::vector<std::wstring>& names) = 0;
 
-    // Czy backend jest "sprzętowy" z punktu widzenia CNG (NCRYPT_IMPL_TYPE_PROPERTY)
+    // Czy backend jest "sprzętowy" z punktu widzenia CNG (NCRYPT_IMPL_TYPE_PROPERTY dostawcy)
     virtual DWORD ImplType() const = 0;
+
+    // NCRYPT_IMPL_TYPE_PROPERTY konkretnego klucza (backend złożony: zależnie od nazwy)
+    virtual DWORD KeyImplType(const std::wstring& name) const { (void)name; return ImplType(); }
 };
 
 // Fabryki backendów (wybór w ksp.cpp)
-IBackend* CreateSoftKeyBackend();   // Etap 0: klucz programowy (sonda)
+#ifdef SB_ENABLE_SOFTKEY
+IBackend* CreateSoftKeyBackend();   // Etap 0: klucz programowy (sonda) — tylko build diagnostyczny
+#endif
 IBackend* CreateRemoteBackend();    // Etap 1+: wtyczka mstsc na komputerze użytkownika (kanał RDP)
-IBackend* CreateCompositeBackend(); // nazwa = odcisk SHA-1 -> remote, inaczej -> softkey
+IBackend* CreateCompositeBackend(); // nazwa = odcisk SHA-1 -> remote, inaczej -> softkey (gdy wbudowany)
 
 }  // namespace sb

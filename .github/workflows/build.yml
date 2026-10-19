@@ -1,6 +1,7 @@
 # SignBridge — budowanie na GitHub Actions (Windows, bez podpisu)
 # Build on GitHub Actions (Windows, unsigned)
 #
+# Najpierw testy jednostkowe x86 i x64 (tests\run-tests.cmd), potem build.
 # Wynik: artefakt "SignBridge-<sha>" z plikami dist\ (exe, msi) i SHA256SUMS.txt.
 # Pliki nie są podpisane (SB_SIGN_THUMBPRINT puste) i nie są bit-w-bit identyczne z wydaniami.
 # Zasady podpisywania: CODE_SIGNING_POLICY.md.
@@ -25,7 +26,7 @@ concurrency:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,6 +43,12 @@ jobs:
         run: |
           dotnet tool install --global wix --version 5.0.2
           "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Testy jednostkowe (x86 + x64)
+        shell: cmd
+        env:
+          SB_TESTS_NO_SKIP: "1"
+        run: cmd /c tests\run-tests.cmd
 
       - name: Build (build.cmd, bez podpisu)
         shell: cmd

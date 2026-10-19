@@ -5,6 +5,8 @@
 #include <bcrypt.h>
 #include <ncrypt.h>
 #include <shlobj.h>
+#include <aclapi.h>
+#include <sddl.h>
 
 #pragma comment(lib, "bcrypt.lib")
 #pragma comment(lib, "ncrypt.lib")
@@ -41,6 +43,16 @@ const wchar_t* const kDllName = L"cpsignbridge.dll";
 const wchar_t* const kRunValue = L"cp-signbridge-panel";
 const wchar_t* const kRunKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
+// Prawa katalogów (SDDL), chronione (P) — bez dziedziczenia z ProgramData, które domyślnie pozwala
+// zwykłym użytkownikom zakładać pliki i katalogi. Właściciel: Administratorzy.
+//   dane: SYSTEM i Administratorzy — pełne; Authenticated Users — odczyt (install.log czyta panel)
+//   logs: użytkownicy tylko listują katalog i zakładają w nim pliki (bez podkatalogów, więc bez
+//         junction); pełne prawa do pliku ma tylko jego właściciel (CREATOR OWNER) i administratorzy
+//   pkg:  wyłącznie SYSTEM i Administratorzy
+const wchar_t* const kSddlData = L"O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;AU)";
+const wchar_t* const kSddlLogs = L"O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;0x1200ab;;;AU)(A;OICIIO;FA;;;CO)";
+const wchar_t* const kSddlPkg  = L"O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)";
+
 bool FileExists(const std::wstring& p) { return GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES; }
 
 std::wstring SysDir(bool wow64) {
@@ -68,17 +80,60 @@ std::wstring Version(const std::wstring& path) {
     return v;
 }
 
-int Run(const std::wstring& cmd) {
-    STARTUPINFOW si = { sizeof(si) };
-    PROCESS_INFORMATION pi = {};
-    std::wstring c = cmd;
-    if (!CreateProcessW(NULL, &c[0], NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) return -1;
-    WaitForSingleObject(pi.hProcess, 30000);
-    DWORD code = 1;
-    GetExitCodeProcess(pi.hProcess, &code);
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
-    return (int)code;
+bool IsReparse(DWORD a) { return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_REPARSE_POINT) != 0; }
+
+// Usuwa samo dowiązanie (junction, symlink) albo plik — nigdy cel dowiązania
+void RemoveLink(const std::wstring& p, DWORD attrs) {
+    if (attrs & FILE_ATTRIBUTE_DIRECTORY) RemoveDirectoryW(p.c_str()); else DeleteFileW(p.c_str());
+}
+
+void EnablePrivilege(const wchar_t* name) {
+    HANDLE tok;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &tok)) return;
+    TOKEN_PRIVILEGES tp = {};
+    tp.PrivilegeCount = 1;
+    if (LookupPrivilegeValueW(NULL, name, &tp.Privileges[0].Luid)) {
+        tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+        AdjustTokenPrivileges(tok, FALSE, &tp, 0, NULL, NULL);
+    }
+    CloseHandle(tok);
+}
+
+// Właściciel i lista praw z SDDL na samym katalogu: przez uchwyt otwarty bez podążania za dowiązaniem,
+// bez rozpropagowania na zawartość (zawartość porządkuje SecureDataDir). Zamiast icacls — bez procesu
+// potomnego, więc nie da się podstawić icacls.exe obok instalatora.
+DWORD SetDirSecurity(const std::wstring& dir, const wchar_t* sddl) {
+    HANDLE h = CreateFileW(dir.c_str(), READ_CONTROL | WRITE_DAC | WRITE_OWNER, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                           NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    if (h == INVALID_HANDLE_VALUE) return GetLastError();
+    DWORD e = ERROR_SUCCESS;
+    BY_HANDLE_FILE_INFORMATION fi = {};
+    if (!GetFileInformationByHandle(h, &fi)) e = GetLastError();
+    else if (!(fi.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || (fi.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) e = ERROR_CANT_ACCESS_FILE;
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    if (e == ERROR_SUCCESS && !ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION_1, &sd, NULL)) e = GetLastError();
+    if (e == ERROR_SUCCESS && !SetKernelObjectSecurity(h, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, sd))
+        e = GetLastError();
+    if (sd) LocalFree(sd);
+    CloseHandle(h);
+    return e;
+}
+
+// Plik: prawa wyłącznie dziedziczone z katalogu (zdejmuje wpisy jawne, np. Modify z 1.0.0).
+// Dodatkowe dowiązanie twarde (plik współdzielony z innym miejscem dysku) — usuwa tylko tę nazwę.
+DWORD ResetFileSecurity(const std::wstring& p) {
+    HANDLE h = CreateFileW(p.c_str(), READ_CONTROL, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING,
+                           FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    if (h == INVALID_HANDLE_VALUE) return GetLastError();
+    BY_HANDLE_FILE_INFORMATION fi = {};
+    BOOL ok = GetFileInformationByHandle(h, &fi);
+    CloseHandle(h);
+    if (!ok) return GetLastError();
+    if (fi.nNumberOfLinks > 1 || (fi.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) return DeleteFileW(p.c_str()) ? ERROR_SUCCESS : GetLastError();
+    ACL empty;
+    InitializeAcl(&empty, sizeof(empty), ACL_REVISION);
+    return SetNamedSecurityInfoW((LPWSTR)p.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION | UNPROTECTED_DACL_SECURITY_INFORMATION,
+                                 NULL, NULL, &empty, NULL);
 }
 
 // Kopiuje plik, a gdy cel jest w użyciu (DLL załadowana przez Optimę, działający panel innego
@@ -152,9 +207,62 @@ bool IsKspRegistered() {
 std::wstring ProgramDir() { return Folder(CSIDL_PROGRAM_FILES) + L"\\cp-signbridge"; }
 std::wstring ProgramDataDir() { return Folder(CSIDL_COMMON_APPDATA) + L"\\cp-signbridge"; }
 std::wstring InstalledPanelVersion() { return Version(ProgramDir() + L"\\" + kAppExe); }
+std::wstring PackageDir() { return ProgramDir() + L"\\pkg"; }
+
+bool PreparePackageDir(const std::wstring& pkg, std::wstring& err) {
+    std::wstring parent = pkg.substr(0, pkg.find_last_of(L'\\'));
+    CreateDirectoryW(parent.c_str(), NULL);
+    if (IsReparse(GetFileAttributesW(parent.c_str()))) { err = parent + L" jest dowiązaniem — przerwano."; return false; }
+    RemoveDirectoryTree(pkg);
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(kSddlPkg, SDDL_REVISION_1, &sd, NULL)) { err = L"Prawa katalogu pakietu: " + ErrorText((LONG)GetLastError()); return false; }
+    SECURITY_ATTRIBUTES sa = { sizeof(sa), sd, FALSE };
+    DWORD e = CreateDirectoryW(pkg.c_str(), &sa) ? ERROR_SUCCESS : GetLastError();
+    LocalFree(sd);
+    // plik z poprzedniej instalacji w użyciu (zniknie po restarcie) — katalog zostaje, tylko poprawiamy prawa
+    if (e == ERROR_ALREADY_EXISTS) e = SetDirSecurity(pkg, kSddlPkg);
+    if (e != ERROR_SUCCESS) { err = L"Nie można przygotować " + pkg + L": " + ErrorText((LONG)e); return false; }
+    return true;
+}
+
+bool SecureDataDir(const std::wstring& pd, std::vector<std::wstring>& log) {
+    // administrator przejmuje też obiekty założone przez zwykłych użytkowników w 1.0.0
+    EnablePrivilege(SE_TAKE_OWNERSHIP_NAME);
+    EnablePrivilege(SE_RESTORE_NAME);
+    const std::wstring logs = pd + L"\\logs";
+    for (const std::wstring* d : { &pd, &logs }) {
+        DWORD a = GetFileAttributesW(d->c_str());
+        if (a != INVALID_FILE_ATTRIBUTES && (IsReparse(a) || !(a & FILE_ATTRIBUTE_DIRECTORY))) { RemoveLink(*d, a); log.push_back(L"- usunięto dowiązanie " + *d); }
+        CreateDirectoryW(d->c_str(), NULL);
+        DWORD e = SetDirSecurity(*d, d == &pd ? kSddlData : kSddlLogs);
+        if (e != ERROR_SUCCESS) { log.push_back(L"! Prawa katalogu " + *d + L": " + ErrorText((LONG)e)); return false; }
+    }
+    // Zawartość (np. z 1.0.0): dowiązania i katalogi poza logs\ (stary pkg\) — usunąć; pliki — prawa po katalogu
+    bool ok = true;
+    for (const std::wstring* d : { &pd, &logs }) {
+        WIN32_FIND_DATAW fd;
+        HANDLE h = FindFirstFileW((*d + L"\\*").c_str(), &fd);
+        if (h == INVALID_HANDLE_VALUE) continue;
+        do {
+            if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
+            std::wstring p = *d + L"\\" + fd.cFileName;
+            DWORD a = fd.dwFileAttributes;
+            if (d == &pd && _wcsicmp(fd.cFileName, L"logs") == 0) continue;
+            if (IsReparse(a)) { RemoveLink(p, a); log.push_back(L"- usunięto dowiązanie " + p); }
+            else if (a & FILE_ATTRIBUTE_DIRECTORY) RemoveDirectoryTree(p);
+            else if (DWORD e = ResetFileSecurity(p)) { log.push_back(L"! Prawa pliku " + p + L": " + ErrorText((LONG)e)); ok = false; }
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    if (ok) log.push_back(L"+ Prawa " + pd + L": zapis tylko dla administratorów, każdy użytkownik widzi tylko własne logi");
+    return ok;
+}
 
 bool InstallServer(const std::wstring& dir, std::vector<std::wstring>& log, bool msiMode) {
     if (!IsAdmin()) { log.push_back(L"! Wymagane uprawnienia administratora."); return false; }
+    // 0. Prawa katalogu danych przed czymkolwiek innym (naprawia też instalację 1.0.0)
+    std::wstring pd = ProgramDataDir();
+    if (!SecureDataDir(pd, log)) return false;
     std::wstring src64 = dir + L"\\x64\\" + kDllName;
     std::wstring src86 = dir + L"\\x86\\" + kDllName;
     if (!FileExists(src64)) src64 = dir + L"\\" + kDllName;
@@ -181,11 +289,7 @@ bool InstallServer(const std::wstring& dir, std::vector<std::wstring>& log, bool
     Replace(src64, pf + L"\\x64\\" + kDllName, log);
     if (FileExists(src86)) Replace(src86, pf + L"\\x86\\" + kDllName, log);
 
-    // 3. Logi dostępne dla wszystkich użytkowników
-    std::wstring pd = ProgramDataDir();
-    CreateDirectoryW(pd.c_str(), NULL);
-    CreateDirectoryW((pd + L"\\logs").c_str(), NULL);
-    Run(L"icacls \"" + pd + L"\" /grant *S-1-5-11:(OI)(CI)M /T /Q");
+    // 3. Logi (katalog i prawa przygotował krok 0)
     log.push_back(L"+ Logi: " + pd + L"\\logs");
 
     // 4. Rejestracja dostawcy w CNG
@@ -251,6 +355,7 @@ bool UninstallServer(std::vector<std::wstring>& log, bool msiMode) {
     }
     RemoveAllUsersConfig();
     RemoveDirectoryTree(ProgramDataDir());
+    RemoveDirectoryTree(PackageDir());
     log.push_back(L"+ Usunięto logi, konfigurację użytkowników i wpisy rejestru.");
     if (msiMode) { log.push_back(L"+ Dostawca wyrejestrowany; pliki programu usuwa pakiet MSI."); return true; }
     RemoveInstallRegistry(HKEY_LOCAL_MACHINE);
@@ -260,13 +365,18 @@ bool UninstallServer(std::vector<std::wstring>& log, bool msiMode) {
 }
 
 void RemoveDirectoryTree(const std::wstring& dir) {
+    DWORD top = GetFileAttributesW(dir.c_str());
+    if (top == INVALID_FILE_ATTRIBUTES) return;
+    if (IsReparse(top)) { RemoveLink(dir, top); return; }
     WIN32_FIND_DATAW fd;
     HANDLE h = FindFirstFileW((dir + L"\\*").c_str(), &fd);
     if (h == INVALID_HANDLE_VALUE) return;
     do {
         if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
         std::wstring p = dir + L"\\" + fd.cFileName;
-        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) RemoveDirectoryTree(p);
+        // junction / symlink: tylko samo dowiązanie (wejście do środka kasowałoby cudze pliki jako SYSTEM)
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) RemoveLink(p, fd.dwFileAttributes);
+        else if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) RemoveDirectoryTree(p);
         else { SetFileAttributesW(p.c_str(), FILE_ATTRIBUTE_NORMAL); if (!DeleteFileW(p.c_str())) MoveFileExW(p.c_str(), NULL, MOVEFILE_DELAY_UNTIL_REBOOT); }
     } while (FindNextFileW(h, &fd));
     FindClose(h);

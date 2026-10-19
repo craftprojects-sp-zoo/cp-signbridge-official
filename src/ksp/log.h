@@ -12,7 +12,18 @@ enum class Level { Trace, Info, Warn, Error };
 
 // Inicjalizacja: ustala katalog logów (%ProgramData%\cp-signbridge\logs) i nazwę pliku
 // ksp-<nazwa_procesu>-<pid>.log. Bezpieczna do wielokrotnego wywołania.
+// Przy starcie usuwa własne pliki tego składnika starsze niż kLogKeepDays.
 void LogInit(const wchar_t* component);
+void LogInitAt(const std::wstring& dir, const wchar_t* component);  // inny katalog (testy)
+std::wstring LogPath();
+
+// Limit pliku: po przekroczeniu bieżący plik przechodzi do <nazwa>.log.old (jedna kopia)
+const ULONGLONG kMaxLogBytes = 5ull * 1024 * 1024;
+const int kLogKeepDays = 30;
+
+// Czy właścicielem pliku jest bieżący użytkownik (albo domyślny właściciel jego tokenu).
+// Log piszemy tylko do własnego pliku, a panel pokazuje tylko własne logi.
+bool FileOwnedByCurrentUser(HANDLE h);
 
 void LogWrite(Level level, const wchar_t* fmt, ...);
 

@@ -2,6 +2,7 @@
 // cp-signbridge — logowanie KSP (implementacja)
 #include "log.h"
 #include <shlobj.h>
+#include <aclapi.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string>
@@ -37,6 +38,42 @@ void EnsureDir(const std::wstring& dir) {
             CreateDirectoryW(cur.c_str(), NULL);
         }
     }
+}
+
+// Otwiera plik logu do dopisywania. Plik musi być nasz, zwykły (nie dowiązanie) i mieć jedną nazwę —
+// inaczej inny użytkownik mógłby czytać nasze wpisy albo przekierować zapis w inne miejsce dysku.
+HANDLE OpenOwnLog(const std::wstring& path) {
+    HANDLE h = CreateFileW(path.c_str(), FILE_APPEND_DATA | FILE_READ_ATTRIBUTES | READ_CONTROL,
+                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                           OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    if (h == INVALID_HANDLE_VALUE) return h;
+    BY_HANDLE_FILE_INFORMATION fi = {};
+    if (!GetFileInformationByHandle(h, &fi) || fi.nNumberOfLinks != 1 ||
+        (fi.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)) || !FileOwnedByCurrentUser(h)) {
+        CloseHandle(h);
+        return INVALID_HANDLE_VALUE;
+    }
+    return h;
+}
+
+// Własne pliki logów składnika starsze niż kLogKeepDays (cudzych nie ruszamy)
+void PruneOldLogs(const std::wstring& dir, const std::wstring& component) {
+    FILETIME now; GetSystemTimeAsFileTime(&now);
+    ULONGLONG limit = (((ULONGLONG)now.dwHighDateTime << 32) | now.dwLowDateTime) - (ULONGLONG)kLogKeepDays * 24 * 3600 * 10000000ULL;
+    WIN32_FIND_DATAW fd;
+    HANDLE f = FindFirstFileW((dir + L"\\" + component + L"-*.log*").c_str(), &fd);
+    if (f == INVALID_HANDLE_VALUE) return;
+    do {
+        if (fd.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) continue;
+        if ((((ULONGLONG)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime) >= limit) continue;
+        std::wstring p = dir + L"\\" + fd.cFileName;
+        HANDLE h = CreateFileW(p.c_str(), DELETE | READ_CONTROL, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                               OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+        if (h == INVALID_HANDLE_VALUE) continue;
+        if (FileOwnedByCurrentUser(h)) { FILE_DISPOSITION_INFO di = { TRUE }; SetFileInformationByHandle(h, FileDispositionInfo, &di, sizeof(di)); }
+        CloseHandle(h);
+    } while (FindNextFileW(f, &fd));
+    FindClose(f);
 }
 
 const wchar_t* LevelName(Level l) {
@@ -94,7 +131,28 @@ std::wstring StatusText(LONG status) {
     return std::wstring(hex) + L" (" + out + L")";
 }
 
-void LogInit(const wchar_t* component) {
+bool FileOwnedByCurrentUser(HANDLE h) {
+    PSID owner = nullptr;
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    if (GetSecurityInfo(h, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION, &owner, NULL, NULL, NULL, &sd) != ERROR_SUCCESS) return false;
+    bool mine = false;
+    HANDLE tok = NULL;  // wątek może działać w imieniu innego użytkownika — wtedy liczy się jego token
+    if (OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &tok) || OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tok)) {
+        DWORD_PTR buf[(sizeof(TOKEN_USER) + SECURITY_MAX_SID_SIZE) / sizeof(DWORD_PTR) + 1];
+        DWORD cb = 0;
+        if (GetTokenInformation(tok, TokenUser, buf, sizeof(buf), &cb)) mine = EqualSid(owner, ((TOKEN_USER*)buf)->User.Sid) != FALSE;
+        if (!mine && GetTokenInformation(tok, TokenOwner, buf, sizeof(buf), &cb)) mine = EqualSid(owner, ((TOKEN_OWNER*)buf)->Owner) != FALSE;
+        CloseHandle(tok);
+    }
+    LocalFree(sd);
+    return mine;
+}
+
+std::wstring LogPath() { return g_logPath; }
+
+void LogInit(const wchar_t* component) { LogInitAt(ProgramDataDir() + L"\\cp-signbridge\\logs", component); }
+
+void LogInitAt(const std::wstring& dir, const wchar_t* component) {
     if (!g_csInit) {
         InitializeCriticalSection(&g_cs);
         g_csInit = true;
@@ -102,8 +160,8 @@ void LogInit(const wchar_t* component) {
     EnterCriticalSection(&g_cs);
     if (g_logPath.empty()) {
         g_component = component ? component : L"ksp";
-        std::wstring dir = ProgramDataDir() + L"\\cp-signbridge\\logs";
         EnsureDir(dir);
+        PruneOldLogs(dir, g_component);
         std::wstring proc = ProcessName();
         // usuń rozszerzenie .exe dla czytelności
         size_t dot = proc.find_last_of(L'.');
@@ -138,12 +196,19 @@ void LogWrite(Level level, const wchar_t* fmt, ...) {
     std::vector<char> utf8(need > 0 ? need : 1);
     WideCharToMultiByte(CP_UTF8, 0, line, -1, utf8.data(), need, NULL, NULL);
 
+    DWORD cbLine = need > 0 ? (DWORD)(need - 1) : 0;
     EnterCriticalSection(&g_cs);
-    HANDLE h = CreateFileW(g_logPath.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-                           OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    HANDLE h = OpenOwnLog(g_logPath);
+    LARGE_INTEGER size = {};
+    if (h != INVALID_HANDLE_VALUE && GetFileSizeEx(h, &size) && (ULONGLONG)size.QuadPart + cbLine > kMaxLogBytes) {
+        CloseHandle(h);
+        // jedna poprzednia kopia; gdy nie da się jej podmienić (cudzy plik .old) — dalej bez logu
+        std::wstring old = g_logPath + L".old";
+        h = MoveFileExW(g_logPath.c_str(), old.c_str(), MOVEFILE_REPLACE_EXISTING) ? OpenOwnLog(g_logPath) : INVALID_HANDLE_VALUE;
+    }
     if (h != INVALID_HANDLE_VALUE) {
         DWORD written = 0;
-        WriteFile(h, utf8.data(), need > 0 ? (DWORD)(need - 1) : 0, &written, NULL);
+        WriteFile(h, utf8.data(), cbLine, &written, NULL);
         CloseHandle(h);
     }
     LeaveCriticalSection(&g_cs);

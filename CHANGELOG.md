@@ -2,6 +2,35 @@
 
 Format oparty na [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/); wersje według [SemVer](https://semver.org/lang/pl/).
 
+## [1.1.0] — 2026-10-19
+
+Powiadomienie o nowej wersji. / *New version notice.*
+
+### Dodano / Added
+
+* Panel sam sprawdza (po uruchomieniu i najwyżej raz na 24 godziny), czy na GitHubie jest nowsze wydanie,
+  i pokazuje dyskretną informację „Dostępna wersja X.Y.Z” z przyciskami **Aktualizuj** i **Przypomnij później**;
+  w menu ikony przy zegarze — „Dostępna wersja X.Y.Z — Aktualizuj”. **Program niczego nie pobiera ani nie instaluje**:
+  „Aktualizuj” otwiera w przeglądarce stały adres strony wydań. Wersje robocze i przedpremierowe są pomijane.
+  / *The panel checks (at start and at most once every 24 hours) whether a newer release exists on GitHub and shows
+  a discreet "Dostępna wersja X.Y.Z" notice with **Aktualizuj** (Update) and **Przypomnij później** (Remind me later);
+  the tray menu shows "Dostępna wersja X.Y.Z — Aktualizuj". **The program never downloads or installs anything**:
+  the button opens the fixed releases page in the browser. Drafts and pre-releases are ignored.*
+* Wyłączenie sprawdzania zasadą grupy / rejestrem: `HKLM\SOFTWARE\Policies\Craftprojects\SignBridge`,
+  `DisableUpdateCheck` = 1 (REG_DWORD); domyślnie włączone. / *Can be disabled by Group Policy / registry:
+  `HKLM\SOFTWARE\Policies\Craftprojects\SignBridge`, `DisableUpdateCheck` = 1 (REG_DWORD); enabled by default.*
+* Testy jednostkowe porównania wersji i odczytu odpowiedzi serwera (także uszkodzonej i obciętej).
+  / *Unit tests for version comparison and parsing of the server response (including malformed and truncated input).*
+
+### Prywatność / Privacy
+
+* Sprawdzanie to jedno zwykłe zapytanie HTTPS do GitHub (systemowy WinHTTP, bez logowania i ciasteczek): GitHub
+  otrzymuje adres IP i standardowe nagłówki (`User-Agent: SignBridge/<wersja>`). Bez internetu program działa
+  jak dotąd — nieudane sprawdzenie trafia tylko do logu. Szczegóły: README, „Powiadomienie o nowej wersji”.
+  / *The check is a single plain HTTPS request to GitHub (Windows WinHTTP, no sign-in, no cookies): GitHub receives
+  the IP address and standard headers (`User-Agent: SignBridge/<version>`). Without internet access the program works
+  as before — a failed check is only logged. Details: README, "Update notice".*
+
 ## [1.0.1] — 2026-10-19
 
 Wydanie poprawkowe z poprawkami bezpieczeństwa. **Zalecana aktualizacja wszystkich instalacji 1.0.0**

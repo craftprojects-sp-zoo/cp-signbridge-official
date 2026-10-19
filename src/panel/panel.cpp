@@ -5,6 +5,8 @@
 // Kreator (3 kroki): rola komputera → co zostanie zrobione → instalacja (postęp) → gotowe.
 // Panel: stan (karta / wtyczka / dostawca / certyfikaty), lista certyfikatów, zdarzenia, akcje.
 // Ikona przy zegarze: stan karty, przełączanie roli, pobranie certyfikatów, panel.
+// Nowa wersja: zainstalowany panel raz na 24 h sprawdza GitHub Releases i pokazuje „Dostępna wersja X.Y.Z”
+//   z przyciskiem „Aktualizuj” (stały adres strony wydań) — niczego nie pobiera ani nie instaluje (updatecheck.h).
 //
 // Role są niezależne — na jednym komputerze można zainstalować obie; zakładki w panelu i menu ikony
 // przełączają widok w obie strony.
@@ -39,6 +41,7 @@
 #include "../common/signer.h"
 #include "../common/dvc.h"
 #include "../common/certs.h"
+#include "../common/updatecheck.h"
 #include "../ksp/log.h"
 
 #pragma comment(lib, "comctl32.lib")
@@ -68,8 +71,10 @@ const wchar_t* const kAutostartName = L"cp-signbridge-panel";
 const wchar_t* const kCfgKey = L"Software\\cp-signbridge";
 const UINT WM_TRAY = WM_APP + 1;
 const UINT WM_WORK_DONE = WM_APP + 2;
+const UINT WM_UPDATE_DONE = WM_APP + 3;
 const UINT_PTR TIMER_TAIL = 1;
 const UINT_PTR TIMER_AUTOSYNC = 2;
+const UINT_PTR TIMER_UPDATE = 3;
 
 const COLORREF C_HEADER = RGB(31, 47, 66);
 const COLORREF C_HEADER2 = RGB(42, 70, 105);
@@ -96,8 +101,9 @@ enum Ctl { ID_FIRST = 1000,
            // panel
            ID_STATUS, ID_LIST, ID_LOG, ID_LOGLBL, ID_LINK, ID_FOOTER_ICON, ID_TAB_WS, ID_TAB_SRV, ID_ROLE_HINT,
            ID_BTN_SYNC, ID_BTN_TEST, ID_BTN_UNSYNC, ID_BTN_REFRESH, ID_BTN_LOGS, ID_BTN_SETUP, ID_BTN_UPDATE, ID_BTN_UNINSTALL, ID_CHK_AUTOSTART,
+           ID_UPD_LBL, ID_BTN_UPD_OPEN, ID_BTN_UPD_LATER,
            // ikona
-           ID_TRAY_SHOW = 2001, ID_TRAY_REFRESH, ID_TRAY_SYNC, ID_TRAY_ROLE_WS, ID_TRAY_ROLE_SRV, ID_TRAY_INFO, ID_TRAY_CARD, ID_TRAY_HELP, ID_TRAY_MANUAL, ID_TRAY_EXIT };
+           ID_TRAY_SHOW = 2001, ID_TRAY_REFRESH, ID_TRAY_SYNC, ID_TRAY_ROLE_WS, ID_TRAY_ROLE_SRV, ID_TRAY_INFO, ID_TRAY_CARD, ID_TRAY_HELP, ID_TRAY_MANUAL, ID_TRAY_EXIT, ID_TRAY_UPDATE };
 
 enum Role { ROLE_WORKSTATION, ROLE_SERVER };
 enum Page { PG_ROLE, PG_SUMMARY, PG_PROGRESS, PG_DONE, PG_PANEL, PG_HELP, PG_SETTINGS, PG_MANUAL, PG_COUNT };
@@ -114,6 +120,7 @@ HWND g_radWs, g_radSrv, g_btnHelp, g_helpText;
 HWND g_btnSettings, g_chkTabs, g_radWs2, g_radSrv2, g_viewLbl, g_chkDelSelf, g_btnManual, g_manualText;
 bool g_showTabs = false;   // przełącznik widoku (dwie zakładki) widoczny w panelu — Ustawienia
 HWND g_btnSync, g_btnTest, g_btnUnsync, g_btnRefresh, g_btnLogs, g_btnSetup, g_btnUpdate, g_btnUninstall, g_chkAutostart;
+HWND g_updLbl, g_btnUpdOpen, g_btnUpdLater;   // „Dostępna wersja X.Y.Z” (CP-SB-19)
 std::vector<HWND> g_pageCtls[PG_COUNT];
 HFONT g_font, g_fontBold, g_fontH1, g_fontH2, g_fontSmall, g_fontBig;
 HICON g_iconApp, g_iconCompany;
@@ -143,6 +150,9 @@ int g_syncedCount = 0;
 int g_syncFailures = 0;
 bool g_syncFailBalloonShown = false;
 bool g_everSynced = false;
+bool g_updChecking = false;       // trwa zapytanie o nową wersję
+std::wstring g_updAvailable;      // nowsza wersja z ostatniego sprawdzenia (menu ikony); "" = brak
+std::wstring g_updBanner;         // to samo, o ile nie odłożono („Przypomnij później”) — pasek w panelu
 
 // ---------------------------------------------------------------------------
 // Pomocnicze
@@ -471,7 +481,8 @@ void BuildUi() {
         L"•  Dla administratora: logi w C:\\ProgramData\\cp-signbridge\\logs (przycisk „Folder logów”).\r\n\r\n"
         L"USTAWIENIA\r\n"
         L"•  „Ten komputer to…” — wybór widoku: komputer z kartą albo serwer. „Pokazuj przełącznik widoku” wyświetla w panelu dwa przyciski do szybkiej zmiany.\r\n"
-        L"•  Program nie łączy się z internetem. Odinstalowanie: „Aplikacje i funkcje” lub przycisk „Odinstaluj” w panelu — nie zostawia śladów.\r\n\r\n"
+        L"•  Nowa wersja: raz na dobę program sprawdza na GitHubie (zwykłe zapytanie HTTPS: adres IP, wersja programu), czy jest nowsze wydanie, i pokazuje „Dostępna wersja …”. „Aktualizuj” otwiera stronę wydań w przeglądarce — program sam niczego nie pobiera ani nie instaluje. Administrator może to wyłączyć zasadą grupy (DisableUpdateCheck).\r\n"
+        L"•  Poza tym program nie łączy się z internetem. Odinstalowanie: „Aplikacje i funkcje” lub przycisk „Odinstaluj” w panelu — nie zostawia śladów.\r\n\r\n"
         L"SignBridge — Craftprojects Sp. z o.o. · craftprojects.pl");
     Btn(PG_MANUAL, L"Wstecz", ID_BTN_MANUAL_BACK, cw - 40 - 120, HEADER_H + 480, 120, 1);
 
@@ -501,6 +512,10 @@ void BuildUi() {
     for (int i = 0; i < 4; ++i) { LVCOLUMNW c = {}; c.mask = LVCF_TEXT | LVCF_WIDTH; c.pszText = (LPWSTR)cols[i]; c.cx = S(widths[i]); ListView_InsertColumn(g_list, i, &c); }
     y += 134;
     g_logLbl = Label(PG_PANEL, L"Zdarzenia", ID_LOGLBL, 24, y, 200, 18, g_fontSmall);
+    // nowa wersja: dyskretnie, w wierszu nad zdarzeniami, po prawej (widoczne tylko, gdy jest nowsza wersja)
+    g_btnUpdLater = Btn(PG_PANEL, L"Przypomnij później", ID_BTN_UPD_LATER, cw - 24 - 150, y - 4, 150, 0, 24);
+    g_btnUpdOpen = Btn(PG_PANEL, L"Aktualizuj", ID_BTN_UPD_OPEN, cw - 24 - 150 - 8 - 110, y - 4, 110, 1, 24);
+    g_updLbl = Label(PG_PANEL, L"", ID_UPD_LBL, 240, y - 4, cw - 24 - 150 - 8 - 110 - 12 - 240, 24, g_fontBold, SS_RIGHT | SS_CENTERIMAGE);
     // g_log tworzony osobno (współdzielony)
     g_log = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL, 0, 0, 10, 10, g_wnd, (HMENU)ID_LOG, g_hinst, NULL);
     SendMessageW(g_log, WM_SETFONT, (WPARAM)g_fontSmall, TRUE);
@@ -547,6 +562,8 @@ void PanelButtons() {
     SetWindowTextW(g_btnSetup, installed ? L"Zainstaluj ponownie" : L"Zainstaluj");
     SetWindowLongPtrW(g_btnSetup, GWLP_USERDATA, installed ? 0 : 1);
     InvalidateRect(g_btnSetup, NULL, TRUE); InvalidateRect(g_tabWs, NULL, TRUE); InvalidateRect(g_tabSrv, NULL, TRUE);
+    bool newer = g_page == PG_PANEL && !g_updBanner.empty();
+    for (HWND h : { g_updLbl, g_btnUpdOpen, g_btnUpdLater }) ShowWindow(h, newer ? SW_SHOW : SW_HIDE);
     // Odśwież / logi przesuwamy w lewo, gdy nie ma przycisków serwera
     int x = ws || !g_ksp ? 24 : 24 + 228 + 138 + 138;
     SetWindowPos(g_btnRefresh, NULL, S(x), S(HEADER_H + 194), 0, 0, SWP_NOZORDER | SWP_NOSIZE);
@@ -860,6 +877,80 @@ void OnWorkDone(WorkResult* r) {
 }
 
 // ---------------------------------------------------------------------------
+// Nowa wersja (CP-SB-19): tylko informacja; „Aktualizuj” otwiera stały adres strony wydań
+// ---------------------------------------------------------------------------
+
+struct UpdateResult { bool ok; std::wstring latest; std::wstring etag; };
+
+ULONGLONG ReadCfgNum(const wchar_t* name) { return _wcstoui64(ReadCfg(name).c_str(), NULL, 10); }
+
+// Wątek roboczy: zapytanie (limit czasu kilka sekund na etap), każdy błąd tylko do logu
+DWORD WINAPI UpdateWorker(LPVOID) {
+    UpdateResult* r = new UpdateResult{ false, L"", L"" };
+    sb::update::FetchResult f = sb::update::Fetch(std::wstring(kTitle) + L"/" + kVersion, ReadCfg(L"UpdateETag"));
+    if (!f.ok) {
+        if (f.httpStatus) SB_INFO(L"Nowa wersja: nie sprawdzono (HTTP %lu)", f.httpStatus);
+        else SB_INFO(L"Nowa wersja: nie sprawdzono (brak połączenia z GitHub: %s)", sb::StatusText((LONG)f.error).c_str());
+    } else if (f.notModified) {
+        r->ok = true;
+        SB_INFO(L"Nowa wersja: bez zmian od ostatniego sprawdzenia");
+    } else {
+        sb::update::ReleaseInfo ri;
+        sb::update::Version cur, latest;
+        sb::update::ParseVersion(std::wstring(kVersion), cur);
+        if (!sb::update::ParseRelease(f.body.data(), f.body.size(), ri)) SB_WARN(L"Nowa wersja: niepoprawna odpowiedź serwera (%u B) — pominięto", (unsigned)f.body.size());
+        else if (sb::update::Decide(ri, cur, latest) == sb::update::Verdict::Ignored) SB_INFO(L"Nowa wersja: wydanie pominięte (wersja robocza, przedpremierowe albo nieznany tag)");
+        else {
+            r->ok = true; r->latest = sb::update::ToDisplay(latest); r->etag = f.etag;
+            SB_INFO(L"Nowa wersja: najnowsze wydanie %s, ten program %s", r->latest.c_str(), kVersion);
+        }
+    }
+    if (!g_wnd || !PostMessageW(g_wnd, WM_UPDATE_DONE, 0, (LPARAM)r)) delete r;
+    return 0;
+}
+
+// Pasek w panelu i pozycja w menu ikony — z zapamiętanego wyniku (bez sieci)
+void ShowUpdateState() {
+    g_updAvailable.clear(); g_updBanner.clear();
+    if (!sb::update::DisabledByPolicy()) {
+        sb::update::Version cur, shown;
+        sb::update::ParseVersion(std::wstring(kVersion), cur);
+        std::wstring latest = ReadCfg(L"UpdateLatest");
+        ULONGLONG now = sb::update::NowSeconds();
+        if (sb::update::ShouldShow(latest, cur, L"", 0, now, shown)) g_updAvailable = sb::update::ToDisplay(shown);
+        if (sb::update::ShouldShow(latest, cur, ReadCfg(L"UpdateSnoozed"), ReadCfgNum(L"UpdateRemindAfter"), now, shown)) g_updBanner = sb::update::ToDisplay(shown);
+    }
+    SetWindowTextW(g_updLbl, (L"Dostępna wersja " + g_updBanner).c_str());
+    PanelButtons();
+}
+
+// Przy starcie panelu i potem co godzinę: zapytanie tylko, gdy minęły 24 h od poprzedniego (także nieudanego)
+void MaybeCheckForUpdate() {
+    if (g_updChecking || sb::update::DisabledByPolicy()) return;
+    ULONGLONG now = sb::update::NowSeconds();
+    if (!sb::update::CheckDue(ReadCfgNum(L"UpdateLastCheck"), now)) return;
+    WriteCfg(L"UpdateLastCheck", std::to_wstring(now));
+    g_updChecking = true;
+    HANDLE t = CreateThread(NULL, 0, UpdateWorker, NULL, 0, NULL);
+    if (t) CloseHandle(t); else g_updChecking = false;
+}
+
+void OnUpdateDone(UpdateResult* r) {
+    g_updChecking = false;
+    if (r->ok && !r->latest.empty()) {
+        WriteCfg(L"UpdateLatest", r->latest);
+        WriteCfg(L"UpdateETag", r->etag);
+    }
+    delete r;
+    ShowUpdateState();
+}
+
+void OpenReleasePage() {
+    // zawsze stały adres (updatecheck.h) — nigdy adres z odpowiedzi serwera
+    ShellExecuteW(NULL, L"open", sb::update::UpdateButtonUrl(), NULL, NULL, SW_SHOWNORMAL);
+}
+
+// ---------------------------------------------------------------------------
 // Kreator
 // ---------------------------------------------------------------------------
 
@@ -956,6 +1047,7 @@ void TrayMenu() {
     POINT pt; GetCursorPos(&pt);
     HMENU m = CreatePopupMenu();
     AppendMenuW(m, MF_STRING | MF_GRAYED, ID_TRAY_INFO, (std::wstring(kTitle) + L" " + kVersion).c_str());
+    if (!g_updAvailable.empty()) AppendMenuW(m, MF_STRING, ID_TRAY_UPDATE, (L"Dostępna wersja " + g_updAvailable + L" — Aktualizuj").c_str());
     if (g_role == ROLE_WORKSTATION) {
         std::wstring card = g_cardSummary.empty() ? L"Karta: nie wykryto" : L"Karta: " + g_cardSummary;
         AppendMenuW(m, MF_STRING | MF_GRAYED, ID_TRAY_CARD, card.c_str());
@@ -1000,7 +1092,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_DRAWITEM: if (((DRAWITEMSTRUCT*)lp)->CtlType == ODT_BUTTON) { DrawButton((DRAWITEMSTRUCT*)lp); return TRUE; } break;
     case WM_CTLCOLORSTATIC: {
         HDC dc = (HDC)wp; SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, (HWND)lp == g_logLbl ? C_MUTED : C_TEXT);
+        SetTextColor(dc, (HWND)lp == g_logLbl ? C_MUTED : (HWND)lp == g_updLbl ? C_PRIMARY_DK : C_TEXT);
         return (LRESULT)GetStockObject(WHITE_BRUSH);
     }
     case WM_COMMAND: {
@@ -1042,6 +1134,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case ID_TAB_WS: if (g_role != ROLE_WORKSTATION) { SetRole(ROLE_WORKSTATION, true); GoPanel(); } return 0;
         case ID_TAB_SRV: if (g_role != ROLE_SERVER) { SetRole(ROLE_SERVER, true); GoPanel(); } return 0;
         case ID_BTN_UPDATE: GoSummary(); return 0;
+        case ID_BTN_UPD_OPEN: case ID_TRAY_UPDATE: OpenReleasePage(); return 0;
+        case ID_BTN_UPD_LATER:
+            WriteCfg(L"UpdateSnoozed", ReadCfg(L"UpdateLatest"));
+            WriteCfg(L"UpdateRemindAfter", std::to_wstring(sb::update::NowSeconds() + sb::update::kRemindLaterSec));
+            ShowUpdateState();
+            return 0;
         case ID_BTN_UNINSTALL:
             if (MessageBoxW(hwnd, L"Odinstalować SignBridge z tego komputera? Podpisywanie kartą przez pulpit zdalny przestanie działać dla wszystkich jego użytkowników.", kTitle, MB_YESNO | MB_ICONWARNING) == IDYES)
                 StartInstall(JOB_UNINSTALL);
@@ -1072,6 +1170,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     case WM_WORK_DONE: OnWorkDone((WorkResult*)lp); return 0;
+    case WM_UPDATE_DONE: OnUpdateDone((UpdateResult*)lp); return 0;
     case WM_TRAY: {
         UINT ev = LOWORD(lp);
         if (ev == WM_LBUTTONUP || ev == WM_LBUTTONDBLCLK || ev == NIN_SELECT || ev == NIN_KEYSELECT) ShowWindowFront();
@@ -1081,6 +1180,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_TIMER:
         if (wp == TIMER_TAIL) { TailLogs(false); if (!g_busy && g_role == ROLE_WORKSTATION && g_page == PG_PANEL) Refresh(); }
         else if (wp == TIMER_AUTOSYNC) { KillTimer(hwnd, TIMER_AUTOSYNC); if (!g_busy) StartJob(JOB_SYNC_AUTO); else ScheduleAutoSync(5000); }
+        else if (wp == TIMER_UPDATE) { SetTimer(hwnd, TIMER_UPDATE, 60 * 60 * 1000, NULL); ShowUpdateState(); MaybeCheckForUpdate(); }
         return 0;
     case WM_WTSSESSION_CHANGE:
         if (wp == WTS_REMOTE_CONNECT || wp == WTS_SESSION_UNLOCK || wp == WTS_CONSOLE_CONNECT) { g_syncFailures = 0; g_syncFailBalloonShown = false; ScheduleAutoSync(4000); Refresh(); }
@@ -1094,6 +1194,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         Shell_NotifyIconW(NIM_DELETE, &g_nid);
         KillTimer(hwnd, TIMER_TAIL);
         KillTimer(hwnd, TIMER_AUTOSYNC);
+        KillTimer(hwnd, TIMER_UPDATE);
         PostQuitMessage(0);
         return 0;
     }
@@ -1458,6 +1559,11 @@ int WINAPI wWinMain(HINSTANCE hinst, HINSTANCE, LPWSTR cmdLine, int) {
         Note(g_role == ROLE_SERVER ? L"Panel serwera. Certyfikaty z Twojego komputera pobierają się same — podpisuj w programie jak zwykle."
                                    : L"Panel gotowy. Połącz się z serwerem przez Podłączanie pulpitu zdalnego i podpisuj w programie.");
         if (!startHidden || !installed) ShowWindowFront();
+        // nowa wersja: od razu z zapamiętanego wyniku; zapytanie po kilku sekundach, a przy autostarcie
+        // (--tray, logowanie wielu użytkowników serwera naraz) z losowym opóźnieniem 1–5 min
+        ShowUpdateState();
+        if (sb::update::DisabledByPolicy()) SB_INFO(L"Nowa wersja: sprawdzanie wyłączone przez administratora (HKLM\\%s\\%s)", sb::update::kPolicyKey, sb::update::kPolicyValue);
+        else SetTimer(g_wnd, TIMER_UPDATE, startHidden ? 60000 + (GetTickCount() ^ GetCurrentProcessId()) % 240000 : 3000, NULL);
     }
 
     MSG m;

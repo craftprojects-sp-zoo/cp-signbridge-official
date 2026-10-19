@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img alt="Wersja 1.0.1" src="https://img.shields.io/badge/wersja-1.0.1-2563eb">
+  <img alt="Wersja 1.1.0" src="https://img.shields.io/badge/wersja-1.1.0-2563eb">
   <img alt="Licencja MIT" src="https://img.shields.io/badge/licencja-MIT-16a34a">
   <img alt="Windows" src="https://img.shields.io/badge/platforma-Windows%2010%20%7C%2011%20%7C%20Server-0078d4">
   <img alt="Bez telemetrii" src="https://img.shields.io/badge/telemetria-brak-6b7280">
@@ -91,10 +91,10 @@ Kanał działa w kliencie mstsc na Windows; inne klienty RDP (macOS, aplikacje p
 | Plik | Zastosowanie |
 |---|---|
 | `SignBridge.Installer.exe` | kreator instalacji — ten sam plik na serwer i na komputery z kartą |
-| `SignBridge-1.0.1.zip` | ten sam program spakowany (gdy przeglądarka lub poczta blokuje `.exe`); w środku `SignBridge Installer.exe` |
+| `SignBridge-1.1.0.zip` | ten sam program spakowany (gdy przeglądarka lub poczta blokuje `.exe`); w środku `SignBridge Installer.exe` |
 | `SignBridge.msi` | instalacja cicha przez GPO / Intune: `msiexec /i "SignBridge.msi" /qn` |
 | `Craftprojects-CodeSigning.cer` | publiczny certyfikat wydawcy (zob. weryfikacja, pkt 3) |
-| `SignBridge-1.0.1-zrodla.zip` | dokładnie te źródła, z których zbudowano wydanie |
+| `SignBridge-1.1.0-zrodla.zip` | dokładnie te źródła, z których zbudowano wydanie |
 | `SHA256SUMS.txt` | sumy kontrolne SHA-256 powyższych plików |
 
 GitHub zamienia spację w nazwie pliku na kropkę, dlatego pobrany instalator nazywa się `SignBridge.Installer.exe`,
@@ -154,7 +154,7 @@ i zgłoś to (zob. [SECURITY.md](SECURITY.md)).
 > Foundation — sposób weryfikacji zostanie wtedy opisany w notach wydania. Zasady podpisywania (co jest podpisywane,
 > kto zatwierdza wydania, prywatność): **[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)**.
 
-Plik `SignBridge-1.0.1.zip` zawiera `SignBridge Installer.exe` — sprawdź sumę samego ZIP-a, a podpis i odcisk
+Plik `SignBridge-1.1.0.zip` zawiera `SignBridge Installer.exe` — sprawdź sumę samego ZIP-a, a podpis i odcisk
 rozpakowanego pliku tak jak wyżej.
 
 ## Budowanie ze źródeł (Windows)
@@ -163,7 +163,7 @@ Build wymaga Windows (MSVC, Windows SDK, zasoby `.rc`); na macOS / Linux nie da 
 
 1. Zainstaluj **[Build Tools for Visual Studio 2026](https://visualstudio.microsoft.com/visual-cpp-build-tools/)**
    (wersja 18) z obciążeniem **„Desktop development with C++”** oraz komponentami **„C++ CMake tools for Windows”**
-   (zawiera CMake ≥ 3.20 i Ninja) i **Windows SDK** (wydania 1.0.0 i 1.0.1 zbudowano z MSVC 19.51 i Windows SDK 10.0.28000).
+   (zawiera CMake ≥ 3.20 i Ninja) i **Windows SDK** (wydania 1.0.0–1.1.0 zbudowano z MSVC 19.51 i Windows SDK 10.0.28000).
 2. *(Opcjonalnie, dla pakietu MSI)* zainstaluj [.NET SDK](https://dotnet.microsoft.com/download), a potem WiX 5:
    ```
    dotnet tool install --global wix --version 5.0.2
@@ -209,16 +209,66 @@ tools/          certyfikat testowy do podpisu kodu, generator ikon
 docs/           dokumentacja użytkownika, rejestr zależności
 ```
 
+## Powiadomienie o nowej wersji
+
+Od wersji 1.1.0 zainstalowany panel SignBridge sam sprawdza, czy na GitHubie jest nowsze wydanie, i pokazuje
+w oknie dyskretną informację **„Dostępna wersja X.Y.Z”** z przyciskami **Aktualizuj** i **Przypomnij później**
+(w menu ikony przy zegarze: „Dostępna wersja X.Y.Z — Aktualizuj”). Nic nie jest wymuszane.
+
+* **Program niczego nie pobiera ani nie instaluje.** „Aktualizuj” otwiera w przeglądarce stały adres
+  <https://github.com/craftprojects-sp-zoo/cp-signbridge-official/releases/latest> (nigdy adres z odpowiedzi serwera);
+  nowy instalator pobiera i uruchamia użytkownik albo administrator.
+* **Kiedy:** po uruchomieniu panelu (przy autostarcie po zalogowaniu — z losowym opóźnieniem 1–5 min) i potem
+  najwyżej raz na 24 godziny na użytkownika; limit czasu 5 s na każdy etap zapytania. Wersje robocze (draft)
+  i przedpremierowe (prerelease) są pomijane. „Przypomnij później” ukrywa informację o tej wersji na 7 dni.
+* **Bez internetu** (np. serwer RDS bez dostępu do sieci) nic się nie zmienia: błąd trafia tylko do logu
+  (`C:\ProgramData\cp-signbridge\logs`), bez okienek i komunikatów.
+* **Jak:** jedno zapytanie HTTPS GET do `https://api.github.com/repos/craftprojects-sp-zoo/cp-signbridge-official/releases/latest`
+  przez systemowy WinHTTP (TLS 1.2 lub nowszy, certyfikat serwera sprawdza Windows, ustawienia proxy systemu,
+  bez przekierowań, bez logowania i tokenu). Z odpowiedzi odczytywane są tylko pola `tag_name`, `draft` i `prerelease`.
+* Na serwerze z wieloma użytkownikami każdy użytkownik sprawdza osobno (raz na dobę, rozłożone w czasie). GitHub
+  przyjmuje 60 takich zapytań na godzinę z jednego adresu IP — po przekroczeniu sprawdzenie kończy się cichym
+  wpisem w logu, a informacja pojawi się przy kolejnej próbie. Na serwerach sprawdzanie można wyłączyć (niżej).
+
+### Wyłączenie sprawdzania (GPO / rejestr)
+
+Domyślnie sprawdzanie jest włączone. Administrator wyłącza je dla całego komputera wartością w rejestrze
+(np. zasady grupy → Preferencje → Ustawienia systemu Windows → Rejestr, albo skryptem):
+
+```
+HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Craftprojects\SignBridge
+    DisableUpdateCheck    REG_DWORD    1
+```
+
+```
+reg add "HKLM\SOFTWARE\Policies\Craftprojects\SignBridge" /v DisableUpdateCheck /t REG_DWORD /d 1 /f
+```
+
+Wartość `1` (lub inna niezerowa) — panel nie wysyła zapytań i nie pokazuje informacji o nowej wersji
+(od uruchomienia panelu, w działającym panelu najpóźniej po godzinie). Brak wartości albo `0` — sprawdzanie włączone.
+Odinstalowanie SignBridge nie usuwa tej zasady (należy do administratora).
+
+### Prywatność
+
+Sprawdzanie wysyła do GitHub (GitHub, Inc.) tylko to, co zawiera każde zwykłe zapytanie HTTPS: adres IP komputera
+(albo serwera proxy) oraz nagłówki `User-Agent: SignBridge/<wersja programu>`, `Accept`, `X-GitHub-Api-Version`
+i — przy kolejnych sprawdzeniach — `If-None-Match` (znacznik ETag poprzedniej odpowiedzi, żeby nie pobierać jej
+ponownie). Bez identyfikatorów komputera i użytkownika, nazw, certyfikatów, licencji i bez ciasteczek. Craftprojects
+tych danych nie otrzymuje; GitHub przetwarza je według własnej polityki prywatności (GitHub General Privacy Statement).
+Wynik (najnowsza wersja, czas sprawdzenia, ETag, odłożenie przypomnienia) zapisywany jest tylko lokalnie,
+w `HKEY_CURRENT_USER\Software\cp-signbridge`, i usuwany przy odinstalowaniu.
+
 ## Bezpieczeństwo i sieć
 
-* Program **nie łączy się z internetem** i nie otwiera żadnych portów ani gniazd sieciowych.
+* Program **nie otwiera żadnych portów** ani nie nasłuchuje w sieci. Jedyne połączenie z internetem to
+  **sprawdzanie nowej wersji** (opis wyżej; do wyłączenia zasadą grupy).
 * Serwer i komputer z kartą komunikują się **wyłącznie kanałem wirtualnym RDP** wewnątrz istniejącej,
   szyfrowanej sesji pulpitu zdalnego danego użytkownika; inne sesje na serwerze tych danych nie widzą.
   Płyną nim tylko skrót do podpisu, gotowy podpis i certyfikaty (część publiczna).
-* **Brak telemetrii** i **brak automatycznych aktualizacji** — nowa wersja to nowy instalator uruchomiony
-  przez administratora.
+* **Brak telemetrii** i **brak automatycznych aktualizacji** — program tylko informuje o nowej wersji;
+  nowa wersja to nowy instalator uruchomiony przez administratora.
 * PIN nigdy nie jest przesyłany ani zapisywany; klucz prywatny zostaje na karcie.
-* Jedyne odwołanie do internetu to link `craftprojects.pl` w stopce panelu — otwiera przeglądarkę tylko po kliknięciu.
+* Link `craftprojects.pl` w stopce panelu i przycisk „Aktualizuj” otwierają przeglądarkę tylko po kliknięciu.
 * Błędy bezpieczeństwa zgłaszaj prywatnie — zob. [SECURITY.md](SECURITY.md).
 
 ## Licencja i zależności
@@ -285,9 +335,9 @@ The private key never leaves the card and the PIN is never transmitted or stored
 ### Install
 
 **[Download the latest release](https://github.com/craftprojects-sp-zoo/cp-signbridge-official/releases/latest)**
-(all releases: **[Releases](../../releases)**): `SignBridge.Installer.exe`, the ZIP (`SignBridge-1.0.1.zip`, for when
+(all releases: **[Releases](../../releases)**): `SignBridge.Installer.exe`, the ZIP (`SignBridge-1.1.0.zip`, for when
 `.exe` downloads are blocked) or `SignBridge.msi`, plus `Craftprojects-CodeSigning.cer`, the exact build sources
-(`SignBridge-1.0.1-zrodla.zip`) and `SHA256SUMS.txt`. Run the same installer on the server and on user PCs
+(`SignBridge-1.1.0-zrodla.zip`) and `SHA256SUMS.txt`. Run the same installer on the server and on user PCs
 (`msiexec /i "SignBridge.msi" /qn` for silent deployment).
 
 GitHub replaces the space in the file name with a dot, so the downloaded installer is `SignBridge.Installer.exe`,
@@ -316,13 +366,13 @@ report it (see [SECURITY.md](SECURITY.md)).
 Releases are signed with a Craftprojects Sp. z o.o. certificate. Signing through the SignPath Foundation may become
 possible in the future; the release notes will say so. Signing rules (what is signed, who approves releases, privacy): **[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)**.
 
-`SignBridge-1.0.1.zip` contains `SignBridge Installer.exe` — check the hash of the ZIP itself, and the signature and
+`SignBridge-1.1.0.zip` contains `SignBridge Installer.exe` — check the hash of the ZIP itself, and the signature and
 thumbprint of the extracted file as above.
 
 ### Build from source (Windows only)
 
 1. Install **Build Tools for Visual Studio 2026** (version 18) with **"Desktop development with C++"**,
-   **"C++ CMake tools for Windows"** and a **Windows SDK** (releases 1.0.0 and 1.0.1 were built with MSVC 19.51 and
+   **"C++ CMake tools for Windows"** and a **Windows SDK** (releases 1.0.0–1.1.0 were built with MSVC 19.51 and
    Windows SDK 10.0.28000).
 2. *(Optional, for MSI)* install the .NET SDK and WiX 5: `dotnet tool install --global wix --version 5.0.2`.
 3. In the repository folder run `build.cmd` from a regular **CMD** prompt.
@@ -337,9 +387,36 @@ bit-for-bit reproducible, and release files are signed).
 
 The build requires Windows (MSVC, Windows SDK, resource compiler); it cannot be run on macOS or Linux.
 
+### Update notice
+
+Since 1.1.0 the installed SignBridge panel checks whether a newer release exists on GitHub and shows a discreet
+"Dostępna wersja X.Y.Z" (new version available) notice with **Aktualizuj** (Update) and **Przypomnij później**
+(Remind me later); the tray icon menu shows "Dostępna wersja X.Y.Z — Aktualizuj". Nothing is forced.
+
+* **The program never downloads or installs anything.** "Aktualizuj" opens the fixed address
+  <https://github.com/craftprojects-sp-zoo/cp-signbridge-official/releases/latest> in the browser (never a URL
+  taken from the server response).
+* **When:** after the panel starts (autostart at logon: random 1–5 min delay), then at most once every 24 hours per
+  user; 5 s timeout for each stage of the request. Drafts and pre-releases are ignored. "Remind me later" hides that
+  version for 7 days.
+* **Offline** (e.g. an RDS server without internet access) nothing changes: a failed check is only written to the
+  log (`C:\ProgramData\cp-signbridge\logs`), with no dialogs.
+* **How:** a single HTTPS GET to `https://api.github.com/repos/craftprojects-sp-zoo/cp-signbridge-official/releases/latest`
+  through Windows WinHTTP (TLS 1.2 or newer, server certificate validated by Windows, system proxy settings,
+  no redirects, no sign-in or token). Only `tag_name`, `draft` and `prerelease` are read from the response.
+* **Disable (GPO / registry):** enabled by default; set `DisableUpdateCheck` = `1` (REG_DWORD) under
+  `HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Craftprojects\SignBridge`, e.g.
+  `reg add "HKLM\SOFTWARE\Policies\Craftprojects\SignBridge" /v DisableUpdateCheck /t REG_DWORD /d 1 /f`.
+* **Privacy:** GitHub receives only what any HTTPS request contains: the IP address (or the proxy's) and the headers
+  `User-Agent: SignBridge/<version>`, `Accept`, `X-GitHub-Api-Version` and, on later checks, `If-None-Match` (the ETag
+  of the previous response). No machine or user identifiers, names, certificates, licences or cookies. Craftprojects
+  does not receive this data; GitHub processes it under its own privacy statement. The result is stored only locally
+  in `HKEY_CURRENT_USER\Software\cp-signbridge` and removed on uninstall.
+
 ### Security
 
-No internet access, no open ports or network sockets, no telemetry and no automatic updates. The server and the
+No open ports or listening sockets, no telemetry and no automatic updates; the only internet connection is the
+update check described above (can be disabled by policy). The server and the
 PC with the card communicate only through the RDP virtual channel inside the user's existing, encrypted RDP session.
 Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 

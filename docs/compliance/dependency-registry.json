@@ -1,7 +1,7 @@
 {
   "generated": "2026-10-19",
   "components": [
-    { "name": "Windows SDK (ncrypt, bcrypt, crypt32, wtsapi32 i inne biblioteki systemowe)", "version": "Windows 10 SDK (_WIN32_WINNT=0x0A00)", "license": "Microsoft Windows SDK License (proprietary)", "ecosystem": "system", "usage": "build/runtime — nagłówki i biblioteki systemowe Windows, linkowane dynamicznie z systemem", "reviewed_at": "2026-10-14" },
+    { "name": "Windows SDK (ncrypt, bcrypt, crypt32, wtsapi32, winhttp i inne biblioteki systemowe)", "version": "Windows 10 SDK (_WIN32_WINNT=0x0A00)", "license": "Microsoft Windows SDK License (proprietary)", "ecosystem": "system", "usage": "build/runtime — nagłówki i biblioteki systemowe Windows, linkowane dynamicznie z systemem; winhttp tylko w SignBridge.exe — sprawdzanie nowej wersji (od 1.1.0)", "reviewed_at": "2026-10-19" },
     { "name": "MSVC — statyczny CRT i biblioteka standardowa C++", "version": "Build Tools for Visual Studio 2026 (v18)", "license": "Microsoft Visual Studio License (redistributable runtime)", "ecosystem": "toolchain", "usage": "build/runtime — statyczny CRT wbudowany w DLL i EXE (/MT)", "reviewed_at": "2026-10-14" },
     { "name": "CMake", "version": ">= 3.20", "license": "BSD-3-Clause", "ecosystem": "narzędzie", "usage": "build — konfiguracja projektu (CMakeLists.txt)", "reviewed_at": "2026-10-13" },
     { "name": "WiX Toolset", "version": "5.0.2", "license": "MS-RL", "ecosystem": "dotnet tool", "usage": "build — pakiet SignBridge.msi (build-msi.cmd, installer/Package.wxs)", "reviewed_at": "2026-10-13" },

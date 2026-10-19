@@ -7,6 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Statyczny CRT: DLL-e ładują się do cudzych procesów (Optima, mstsc) — bez zależności od VC Redist
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+# Diagnostyka z Etapu 0: klucz programowy w KSP (tworzenie kluczy, sbctl create-cert). Nigdy w wydaniu.
+option(SB_ENABLE_SOFTKEY "Backend softkey w cpsignbridge.dll (tylko diagnostyka)" OFF)
+option(SB_BUILD_TESTS "Testy jednostkowe (tests/, ctest)" OFF)
+
 add_compile_definitions(UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS _WIN32_WINNT=0x0A00)
 if(MSVC)
   add_compile_options(/W4 /wd4100 /wd4189 /wd4245 /utf-8 /EHsc /permissive-)
@@ -20,7 +24,6 @@ set(WIN_LIBS ncrypt bcrypt crypt32 shell32 advapi32 wtsapi32 version ole32 uuid)
 # --- KSP (serwer; biblioteka ładowana przez CNG) — x64 i x86 ---
 add_library(cpsignbridge SHARED
   src/ksp/ksp.cpp
-  src/ksp/backend_softkey.cpp
   src/ksp/backend_remote.cpp
   src/ksp/backend_composite.cpp
   src/ksp/log.cpp
@@ -28,6 +31,11 @@ add_library(cpsignbridge SHARED
   ${COMMON_SRV_SRC}
 )
 target_include_directories(cpsignbridge PRIVATE src/ksp src/common)
+if(SB_ENABLE_SOFTKEY)
+  message(WARNING "SB_ENABLE_SOFTKEY=ON: build diagnostyczny, nie do wydania")
+  target_sources(cpsignbridge PRIVATE src/ksp/backend_softkey.cpp)
+  target_compile_definitions(cpsignbridge PRIVATE SB_ENABLE_SOFTKEY)
+endif()
 target_link_libraries(cpsignbridge PRIVATE ${WIN_LIBS})
 set_target_properties(cpsignbridge PROPERTIES OUTPUT_NAME "cpsignbridge" PREFIX "")
 
@@ -71,4 +79,23 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
   set_source_files_properties(src/panel/panel.rc PROPERTIES
     COMPILE_OPTIONS "/I${EMBED_DIR}"
     OBJECT_DEPENDS "${EMBED_FILES}")
+endif()
+
+# --- testy jednostkowe (CI: x86 i x64; bez zewnętrznych bibliotek) ---
+if(SB_BUILD_TESTS)
+  enable_testing()
+  add_executable(sbtests
+    tests/main.cpp
+    tests/test_protocol.cpp
+    tests/test_kspsetup.cpp
+    tests/test_ksp.cpp
+    src/common/kspsetup.cpp
+    src/ksp/backend_composite.cpp
+    src/ksp/backend_remote.cpp
+    src/ksp/log.cpp
+    ${COMMON_SRV_SRC}
+  )
+  target_include_directories(sbtests PRIVATE src/common src/ksp tests)
+  target_link_libraries(sbtests PRIVATE ${WIN_LIBS})
+  add_test(NAME sbtests COMMAND sbtests)
 endif()

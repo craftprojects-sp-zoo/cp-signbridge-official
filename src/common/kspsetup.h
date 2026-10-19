@@ -4,7 +4,9 @@
 //   * sbpanel.exe, sbctl.exe -> %ProgramFiles%\cp-signbridge
 //   * autostart panelu dla wszystkich użytkowników (HKLM\...\Run) — panel w sesji RDP
 //     sam pobiera certyfikaty z komputera użytkownika
-//   * katalog logów %ProgramData%\cp-signbridge\logs z prawami zapisu dla wszystkich
+//   * %ProgramData%\cp-signbridge: zapis tylko dla administratorów; w logs\ każdy użytkownik może
+//     założyć plik, ale czyta i zmienia wyłącznie własne (CREATOR OWNER)
+//   * pakiet do instalacji wypakowywany do %ProgramFiles%\cp-signbridge\pkg (tylko administratorzy)
 // Używane przez sbctl install/uninstall i sbpanel --install-server/--uninstall-server.
 #pragma once
 #include <windows.h>
@@ -22,6 +24,15 @@ bool IsKspRegistered();                 // NCryptOpenStorageProvider działa
 std::wstring ProgramDir();              // %ProgramFiles%\cp-signbridge
 std::wstring ProgramDataDir();          // %ProgramData%\cp-signbridge
 std::wstring InstalledPanelVersion();   // wersja kAppExe w ProgramDir ("" gdy brak)
+std::wstring PackageDir();              // %ProgramFiles%\cp-signbridge\pkg
+
+// Pusty katalog pakietu z prawami tylko dla administratorów i SYSTEM (stara zawartość usunięta).
+bool PreparePackageDir(const std::wstring& pkg, std::wstring& err);
+
+// Prawa katalogu danych (%ProgramData%\cp-signbridge) — także naprawa instalacji 1.0.0, która dawała
+// Modify dla Authenticated Users na całym katalogu: zdejmuje stare wpisy, usuwa dowiązania (junction,
+// symlink) i katalogi inne niż logs\ (stary pkg\). Wymaga administratora.
+bool SecureDataDir(const std::wstring& pd, std::vector<std::wstring>& log);
 
 // fromDir: katalog pakietu (kAppExe, x64\, x86\; opcjonalnie sbctl.exe). log: kolejne komunikaty.
 // msiMode=true (wywołanie z pakietu MSI): program już leży w ProgramDir i wpis w „Aplikacje i funkcje” robi MSI
@@ -32,7 +43,8 @@ void WriteInstallRegistry(HKEY root, const std::wstring& installDir, const std::
 void RemoveInstallRegistry(HKEY root);
 bool UninstallServer(std::vector<std::wstring>& log, bool msiMode = false);
 
-// Sprzątanie: cały katalog (pliki w użyciu — usunięcie po restarcie); klucz Software\cp-signbridge
+// Sprzątanie: cały katalog (pliki w użyciu — usunięcie po restarcie; w dowiązania nie wchodzi —
+// usuwa samo dowiązanie, nie jego cel); klucz Software\cp-signbridge
 // we wszystkich profilach użytkowników (HKEY_USERS) — wymaga administratora; w bieżącym profilu (HKCU)
 void RemoveDirectoryTree(const std::wstring& dir);
 void RemoveAllUsersConfig();

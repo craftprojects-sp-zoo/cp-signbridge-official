@@ -652,6 +652,8 @@ void TailLogs(bool initial) {
         if (sz.QuadPart <= known) { g_logSizes[path] = sz.QuadPart; continue; }
         HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
         if (f == INVALID_HANDLE_VALUE) continue;
+        // tylko logi bieżącego użytkownika (procesy innych użytkowników serwera — nie nasze dane)
+        if (!sb::FileOwnedByCurrentUser(f)) { CloseHandle(f); g_logSizes[path] = sz.QuadPart; continue; }
         LARGE_INTEGER pos; pos.QuadPart = (LONGLONG)known;
         SetFilePointerEx(f, pos, NULL, FILE_BEGIN);
         std::string buf((size_t)(sz.QuadPart - known), '\0');
@@ -1140,10 +1142,12 @@ int SilentServer(bool install, const Args& a) {
     CreateDirectoryW(pd.c_str(), NULL);
     bool ok;
     if (install) {
-        std::wstring err, pkg = pd + L"\\pkg";
-        ok = ExtractPackage(pkg, err);
+        // pakiet tylko w katalogu administratorów (Program Files), nie w ProgramData
+        std::wstring err, pkg = sb::kspsetup::PackageDir();
+        ok = sb::kspsetup::PreparePackageDir(pkg, err) && ExtractPackage(pkg, err);
         if (!ok) log.push_back(L"! " + err);
         else ok = sb::kspsetup::InstallServer(pkg, log, a.msi);
+        sb::kspsetup::RemoveDirectoryTree(pkg);
         WriteLogFile(pd + L"\\install.log", log);
     } else {
         ok = sb::kspsetup::UninstallServer(log, a.msi);
@@ -1160,8 +1164,8 @@ int SilentAll(bool install, const Args& a) {
     bool ok;
     if (install) {
         CreateDirectoryW(pd.c_str(), NULL);
-        std::wstring pkg = pd + L"\\pkg";
-        ok = ExtractPackage(pkg, msg);
+        std::wstring pkg = sb::kspsetup::PackageDir();
+        ok = sb::kspsetup::PreparePackageDir(pkg, msg) && ExtractPackage(pkg, msg);
         if (!ok) log.push_back(L"! " + msg);
         else {
             ok = sb::kspsetup::InstallServer(pkg, log, a.msi);
@@ -1202,7 +1206,8 @@ int SilentWorkstation(bool install, const Args& a) {
     CreateDirectoryW(dir.c_str(), NULL);
     if (install) {
         std::wstring pkg = dir + L"\\pkg";
-        if (!ExtractPackage(pkg, msg)) { log.push_back(L"! " + msg); ok = false; }
+        if (a.machine && !sb::kspsetup::PreparePackageDir(pkg, msg)) { log.push_back(L"! " + msg); ok = false; }
+        else if (!ExtractPackage(pkg, msg)) { log.push_back(L"! " + msg); ok = false; }
         else {
             ok = sb::pluginsetup::Install(pkg, msg, a.machine, dir); log.push_back((ok ? L"+ " : L"! ") + msg);
             if (ok) {

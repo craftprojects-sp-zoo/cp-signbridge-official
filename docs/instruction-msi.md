@@ -86,4 +86,17 @@ oraz odpowiednie `--uninstall-*`.
 * `C:\ProgramData\cp-signbridge\logs\` — logi
 
 Odinstalowanie usuwa wszystko powyżej (pliki w użyciu — po restarcie) oraz klucze `Software\cp-signbridge`
-w profilach wszystkich użytkowników. Program nie łączy się z siecią poza kanałem wewnątrz sesji RDP.
+w profilach wszystkich użytkowników. Poza kanałem wewnątrz sesji RDP program łączy się tylko z GitHub, aby sprawdzić,
+czy jest nowsza wersja (od 1.1.0, raz na dobę; niczego nie pobiera).
+
+## Wyłączenie sprawdzania nowej wersji (GPO)
+
+Domyślnie włączone. Wyłączenie dla całego komputera (zasady grupy → Preferencje → Rejestr albo skrypt startowy):
+
+```
+reg add "HKLM\SOFTWARE\Policies\Craftprojects\SignBridge" /v DisableUpdateCheck /t REG_DWORD /d 1 /f
+```
+
+Wartość `1` — panel nie wysyła zapytań do GitHub i nie pokazuje informacji „Dostępna wersja”; brak wartości lub `0` —
+sprawdzanie włączone. Zalecane na serwerach RDS bez dostępu do internetu albo gdy aktualizacje wdraża administrator.
+Zasada nie jest usuwana przy odinstalowaniu. Szczegóły i prywatność: [README](../README.md#powiadomienie-o-nowej-wersji).

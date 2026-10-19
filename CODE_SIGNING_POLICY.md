@@ -37,12 +37,19 @@ Kontakt: [biuro@craftprojects.pl](mailto:biuro@craftprojects.pl).
 
 ### Prywatność
 
-Ten program nie przesyła żadnych informacji do innych systemów sieciowych, chyba że użytkownik wyraźnie tego zażąda.
+Ten program nie przesyła żadnych informacji do innych systemów sieciowych, chyba że użytkownik wyraźnie tego zażąda —
+z jednym wyjątkiem opisanym niżej (sprawdzanie nowej wersji), który administrator może wyłączyć.
 
 SignBridge komunikuje się wyłącznie kanałem wirtualnym RDP wewnątrz istniejącej sesji pulpitu zdalnego użytkownika
 (skrót do podpisu, gotowy podpis, publiczne części certyfikatów) — między serwerem a komputerem z kartą, na żądanie
 użytkownika. Nie ma telemetrii ani automatycznych aktualizacji; jedyny link do internetu (`craftprojects.pl` w stopce
 panelu) otwiera przeglądarkę dopiero po kliknięciu. Szczegóły: [README](README.md#bezpieczeństwo-i-sieć).
+
+Sprawdzanie nowej wersji (od 1.1.0): zainstalowany panel najwyżej raz na 24 godziny wysyła do GitHub zwykłe zapytanie
+HTTPS o najnowsze wydanie — GitHub otrzymuje tylko adres IP i standardowe nagłówki (`User-Agent: SignBridge/<wersja>`);
+bez identyfikatorów komputera i użytkownika, bez ciasteczek. Program niczego nie pobiera ani nie instaluje; przycisk
+„Aktualizuj” otwiera stronę wydań w przeglądarce. Wyłączenie: `HKLM\SOFTWARE\Policies\Craftprojects\SignBridge`,
+`DisableUpdateCheck` = 1 (REG_DWORD). Szczegóły: [README](README.md#powiadomienie-o-nowej-wersji).
 
 ### Zgłaszanie problemów
 
@@ -86,12 +93,19 @@ Contact: [biuro@craftprojects.pl](mailto:biuro@craftprojects.pl).
 ### Privacy policy
 
 This program will not transfer any information to other networked systems unless specifically requested by the user
-or the person installing or operating it.
+or the person installing or operating it, with the single exception of the update check described below, which
+administrators can disable.
 
 SignBridge communicates only through the RDP virtual channel inside the user's existing Remote Desktop session
 (the hash to be signed, the signature and public certificates) — between the server and the PC with the card, on the
 user's request. There is no telemetry and no automatic updates; the only internet link (`craftprojects.pl` in the panel
 footer) opens a browser only when clicked. Details: [README](README.md#security).
+
+Update check (since 1.1.0): at most once every 24 hours the installed panel sends a plain HTTPS request for the latest
+release to GitHub — GitHub receives only the IP address and standard headers (`User-Agent: SignBridge/<version>`);
+no machine or user identifiers, no cookies. Nothing is downloaded or installed; the "Aktualizuj" button opens the
+releases page in the browser. Disable: `HKLM\SOFTWARE\Policies\Craftprojects\SignBridge`, `DisableUpdateCheck` = 1
+(REG_DWORD). Details: [README](README.md#update-notice).
 
 ### Reporting
 

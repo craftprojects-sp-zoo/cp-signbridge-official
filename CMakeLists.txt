@@ -67,11 +67,13 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     src/common/pluginsetup.cpp
     src/common/kspsetup.cpp
     src/common/signer.cpp
+    src/common/updatecheck.cpp
     src/ksp/log.cpp
     ${COMMON_SRV_SRC}
   )
   target_include_directories(sbpanel PRIVATE src/common src/ksp src/panel)
-  target_link_libraries(sbpanel PRIVATE ${WIN_LIBS} comctl32 user32 gdi32 msimg32)
+  # winhttp: tylko panel (sprawdzanie nowej wersji, CP-SB-19); biblioteki KSP i wtyczki nie łączą się z siecią
+  target_link_libraries(sbpanel PRIVATE ${WIN_LIBS} comctl32 user32 gdi32 msimg32 winhttp)
   # DLL-e obu architektur wbudowane w sbpanel.exe: build.cmd kopiuje je do build/embed/ przed budowaniem panelu
   set(EMBED_DIR "${CMAKE_SOURCE_DIR}/build/embed")
   set(EMBED_FILES "${EMBED_DIR}/x64-cpsignbridge.dll" "${EMBED_DIR}/x86-cpsignbridge.dll"
@@ -89,13 +91,15 @@ if(SB_BUILD_TESTS)
     tests/test_protocol.cpp
     tests/test_kspsetup.cpp
     tests/test_ksp.cpp
+    tests/test_update.cpp
     src/common/kspsetup.cpp
+    src/common/updatecheck.cpp
     src/ksp/backend_composite.cpp
     src/ksp/backend_remote.cpp
     src/ksp/log.cpp
     ${COMMON_SRV_SRC}
   )
-  target_include_directories(sbtests PRIVATE src/common src/ksp tests)
-  target_link_libraries(sbtests PRIVATE ${WIN_LIBS})
+  target_include_directories(sbtests PRIVATE src/common src/ksp src/panel tests)
+  target_link_libraries(sbtests PRIVATE ${WIN_LIBS} winhttp)
   add_test(NAME sbtests COMMAND sbtests)
 endif()

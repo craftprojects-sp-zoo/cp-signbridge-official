@@ -120,9 +120,12 @@ Nowa wersja = nowy MSI o wyższym numerze (MajorUpgrade podmienia w miejscu). Ź
 
 ## Praca offline i bezpieczeństwo kanału
 
-Program nie łączy się z niczym poza kanałem wirtualnym wewnątrz istniejącej sesji RDP: brak sprawdzania
-aktualizacji, telemetrii, pobierania czcionek (używa systemowego Segoe UI) czy innych zasobów z sieci.
-Jedyne odwołanie do internetu to link `craftprojects.pl` w stopce — otwiera przeglądarkę tylko po kliknięciu.
+Poza kanałem wirtualnym wewnątrz istniejącej sesji RDP program łączy się tylko z GitHub, aby sprawdzić, czy jest
+nowsza wersja (od 1.1.0; najwyżej raz na 24 h, tylko odczyt numeru wersji, bez pobierania i instalacji; wyłączenie
+zasadą grupy `HKLM\SOFTWARE\Policies\Craftprojects\SignBridge`, `DisableUpdateCheck` = 1 — opis w [README](../README.md#powiadomienie-o-nowej-wersji)).
+Bez telemetrii, pobierania czcionek (używa systemowego Segoe UI) czy innych zasobów z sieci. Bez internetu program
+działa tak samo — nieudane sprawdzenie zapisuje się tylko w logu. Link `craftprojects.pl` w stopce i przycisk
+„Aktualizuj” otwierają przeglądarkę tylko po kliknięciu.
 Program nie otwiera gniazd sieciowych ani portów — serwer i komputer z kartą komunikują się wyłącznie kanałem RDP.
 
 Dane w kanale (skrót do podpisu, podpis, certyfikaty — bez PIN-u) płyną wewnątrz połączenia RDP, które jest

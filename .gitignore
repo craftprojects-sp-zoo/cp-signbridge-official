@@ -29,3 +29,7 @@ Thumbs.db
 
 # inne
 *.bundle
+
+# Pliki lokalne narzędzi pracy (nie są częścią repozytorium)
+CLAUDE.md
+.claude/

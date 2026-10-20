@@ -6,3 +6,5 @@
 *.rc  text eol=crlf
 *.ico binary
 *.png binary
+
+tools/*.sh text eol=lf

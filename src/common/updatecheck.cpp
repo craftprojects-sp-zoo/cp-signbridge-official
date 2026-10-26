@@ -247,6 +247,12 @@ ULONGLONG NowSeconds() {
     return u.QuadPart / 10000000ull;
 }
 
+bool CloseRunningForInstall(bool installerFile, const std::wstring& runningExe, const std::wstring& installedExe,
+                            const std::wstring& installedVersion, const std::wstring& myVersion) {
+    return installerFile && !runningExe.empty() && _wcsicmp(runningExe.c_str(), installedExe.c_str()) == 0
+        && installedVersion != myVersion;
+}
+
 // ---------------------------------------------------------------------------
 // Polityka i zapytanie
 // ---------------------------------------------------------------------------

@@ -2,6 +2,42 @@
 
 Format oparty na [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/); wersje według [SemVer](https://semver.org/lang/pl/).
 
+## [1.1.1] — 2026-10-26
+
+Wydanie poprawkowe: aktualizacja z pobranego instalatora. / *Fix release: updating from a downloaded installer.*
+
+### Poprawiono / Fixed
+
+* Instalator EXE uruchomiony, gdy SignBridge działa przy zegarze, zamyka działający program i pokazuje kreator
+  instalacji nowej wersji (wcześniej pokazywał tylko okno starej wersji i kończył pracę, więc aktualizacja się nie
+  odbywała). / *The EXE installer started while SignBridge is running in the tray now closes the running program and
+  shows the setup wizard of the new version (previously it only brought up the old window and exited, so nothing
+  was updated).*
+* Program kończy się na prośbę instalatora (Restart Manager), więc aktualizacja przez MSI podmienia plik bez
+  restartu Windows (wcześniej plik zostawał w użyciu, konfigurację robiła stara wersja, a `msiexec` żądał restartu).
+  / *The program exits when the installer asks it to (Restart Manager), so an MSI update replaces the file without
+  restarting Windows (previously the file stayed in use, the old version ran the configuration and `msiexec`
+  required a restart).*
+
+### Zmieniono / Changed
+
+* Pakiet MSI sam zamyka działający SignBridge we wszystkich sesjach (także na serwerze RDS): najpierw prośba
+  o zamknięcie, po 5 s zakończenie pozostałych kopii; bez restartu. Przy odinstalowaniu tak samo.
+  / *The MSI closes the running SignBridge in all sessions (including RDS servers): first a close request, after
+  5 s the remaining copies are ended; no restart. The same on uninstall.*
+* `SignBridge.msi` zawiera niezmienioną bibliotekę akcji WiX Toolset Util 5.0.2 (licencja MS-RL); wpis w rejestrze
+  zależności. / *`SignBridge.msi` contains the unmodified WiX Toolset Util 5.0.2 custom action library (MS-RL
+  license); listed in the dependency registry.*
+
+### Aktualizacja z 1.1.0 / Updating from 1.1.0
+
+* Instalator EXE (`SignBridge.Installer.exe`) — bez dodatkowych kroków. Pakiet MSI — najlepiej po zamknięciu
+  programu (menu ikony przy zegarze → **Zakończ**): wersja 1.1.0 nie reaguje na prośbę o zamknięcie, więc pakiet
+  kończy ją dopiero po kilku sekundach. Od 1.1.1 MSI zamyka program sam.
+  / *EXE installer (`SignBridge.Installer.exe`) — no extra steps. MSI — preferably after closing the program
+  (tray icon menu → **Zakończ** / Exit): 1.1.0 does not respond to the close request, so the package ends it only
+  after a few seconds. From 1.1.1 on, the MSI closes the program by itself.*
+
 ## [1.1.0] — 2026-10-19
 
 Powiadomienie o nowej wersji. / *New version notice.*

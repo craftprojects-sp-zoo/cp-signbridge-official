@@ -173,6 +173,17 @@ TEST(update_button_url_is_fixed) {
     CHECK(wcscmp(kApiPath, L"/repos/craftprojects-sp-zoo/cp-signbridge-official/releases/latest") == 0);
 }
 
+TEST(update_installer_closes_running_app) {
+    // CP-SB-20: instalator nowej wersji przy działającym programie nie może tylko pokazać starego okna
+    const std::wstring inst = L"C:\\Program Files\\cp-signbridge\\SignBridge.exe";
+    CHECK(CloseRunningForInstall(true, inst, inst, L"1.1.0.0", L"1.1.1.0"));
+    CHECK(CloseRunningForInstall(true, L"C:\\PROGRAM FILES\\CP-SIGNBRIDGE\\signbridge.exe", inst, L"1.1.0.0", L"1.2.0.0"));
+    CHECK(!CloseRunningForInstall(true, inst, inst, L"1.1.0.0", L"1.1.0.0"));        // ta sama wersja: otwórz program
+    CHECK(!CloseRunningForInstall(false, inst, inst, L"1.1.0.0", L"1.1.1.0"));       // to nie instalator
+    CHECK(!CloseRunningForInstall(true, L"C:\\Users\\u\\Downloads\\SignBridge Installer.exe", inst, L"1.1.0.0", L"1.1.1.0"));  // drugi instalator
+    CHECK(!CloseRunningForInstall(true, L"", inst, L"1.1.0.0", L"1.1.1.0"));         // nieznany proces
+}
+
 TEST(update_schedule_and_snooze) {
     const ULONGLONG day = 24 * 3600, now = 1800000000ull;
     CHECK(CheckDue(0, now));

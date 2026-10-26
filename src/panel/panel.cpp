@@ -1189,6 +1189,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_installing) return 0;
         ShowWindow(hwnd, SW_HIDE);
         return 0;
+    case WM_ENDSESSION:
+        // instalator MSI (Restart Manager) zamyka program, żeby podmienić plik: zakończ, zamiast schować okno —
+        // inaczej plik zostaje w użyciu, konfigurację robi stara wersja i Windows żąda restartu (CP-SB-20)
+        if (wp && (lp & ENDSESSION_CLOSEAPP) && !g_installing) DestroyWindow(hwnd);
+        return 0;
     case WM_DESTROY:
         WTSUnRegisterSessionNotification(hwnd);
         Shell_NotifyIconW(NIM_DELETE, &g_nid);
@@ -1454,6 +1459,28 @@ DWORD WINAPI CleanupThread(LPVOID p) {
     return 0;
 }
 
+// Pobrany instalator innej wersji, a w tej sesji działa zainstalowany program (aktualizacja z powiadomienia przy
+// ikonie): zamknij go poleceniem „Zakończ” z menu ikony (rozumie je też 1.1.0) i przejmij mutex — wtedy instalator
+// pokaże kreator, a nie tylko stare okno (CP-SB-20). false = zostaw działającą kopię (dotychczasowe zachowanie).
+bool CloseRunningAppForUpdate(HWND other, HANDLE mutex) {
+    DWORD pid = 0;
+    if (!other || !GetWindowThreadProcessId(other, &pid) || !pid) return false;
+    std::wstring running;
+    if (HANDLE p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid)) {
+        wchar_t buf[MAX_PATH * 2]; DWORD n = ARRAYSIZE(buf);
+        if (QueryFullProcessImageNameW(p, 0, buf, &n)) running.assign(buf, n);
+        CloseHandle(p);
+    }
+    if (!sb::update::CloseRunningForInstall(IsInstallerFile(), running, InstalledExe(),
+                                            sb::kspsetup::InstalledPanelVersion(), kVersion)) return false;
+    SB_INFO(L"Aktualizacja: zamykam działający program %s (pid %lu), żeby uruchomić instalator %s", running.c_str(), pid, kVersion);
+    PostMessageW(other, WM_COMMAND, ID_TRAY_EXIT, 0);
+    DWORD w = WaitForSingleObject(mutex, 10000);
+    if (w == WAIT_OBJECT_0 || w == WAIT_ABANDONED) return true;
+    SB_WARN(L"Aktualizacja: działający program nie zakończył się w 10 s — pokazuję jego okno");
+    return false;
+}
+
 HFONT MakeFont(int pt, int weight) {
     return CreateFontW(-MulDiv(pt, (int)(96 * g_scale), 72), 0, 0, 0, weight, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
@@ -1493,9 +1520,11 @@ int WINAPI wWinMain(HINSTANCE hinst, HINSTANCE, LPWSTR cmdLine, int) {
     g_mutex = mutex;
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         HWND other = FindWindowW(kClass, NULL);
-        if (other) { ShowWindow(other, SW_SHOW); ShowWindow(other, SW_RESTORE); SetForegroundWindow(other); }
-        finishCleanup();   // program już działa (np. aktualizacja przy otwartej ikonie) — dokończ sprzątanie przed wyjściem
-        return 0;
+        if (!CloseRunningAppForUpdate(other, mutex)) {
+            if (other) { ShowWindow(other, SW_SHOW); ShowWindow(other, SW_RESTORE); SetForegroundWindow(other); }
+            finishCleanup();   // program już działa (np. aktualizacja przy otwartej ikonie) — dokończ sprzątanie przed wyjściem
+            return 0;
+        }
     }
 
     INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_LISTVIEW_CLASSES | ICC_STANDARD_CLASSES | ICC_LINK_CLASS | ICC_PROGRESS_CLASS };

@@ -13,8 +13,8 @@
 #define IDR_RDP_X64  203
 #define IDR_RDP_X86  204
 
-#define SB_VERSION_NUM   1,1,0,0
-#define SB_VERSION_STR   "1.1.0.0"
+#define SB_VERSION_NUM   1,1,1,0
+#define SB_VERSION_STR   "1.1.1.0"
 #define SB_APP_NAME      "SignBridge"
 #define SB_COMPANY       "Craftprojects Sp. z o.o."
 #define SB_WEBSITE       "https://craftprojects.pl"

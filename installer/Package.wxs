@@ -4,12 +4,18 @@
      Instalacja:    msiexec /i "SignBridge.msi" /qn
      Odinstalowanie: msiexec /x "SignBridge.msi" /qn
      Pakiet kopiuje program do Program Files\cp-signbridge i uruchamia go z "- -install-all - -msi",
-     co rejestruje dostawcę podpisu i wtyczkę (DLL wbudowane w program) oraz autostart panelu dla każdego użytkownika. -->
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+     co rejestruje dostawcę podpisu i wtyczkę (DLL wbudowane w program) oraz autostart panelu dla każdego użytkownika.
+     Przed wymianą plików pakiet zamyka działający SignBridge.exe we wszystkich sesjach (WiX Util CloseApplication):
+     najpierw prośba o zamknięcie w sesji instalującego, potem zakończenie pozostałych kopii z konta SYSTEM —
+     bez restartu, także przy aktualizacji z 1.1.0, która prośby nie obsługuje. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Package Name="SignBridge" Manufacturer="Craftprojects Sp. z o.o."
            Version="$(var.Version)" UpgradeCode="0a0bc45a-2dcf-4bdd-8b2b-c202f724bc39"
            Scope="perMachine" Language="1045" Codepage="65001" InstallerVersion="500">
-    <MajorUpgrade DowngradeErrorMessage="Nowsza wersja programu jest już zainstalowana." />
+    <!-- stara wersja usuwana po wymianie plików: domyślnie (przed InstallInitialize) kasowałaby SignBridge.exe, zanim
+         CloseApplication zamknie program, a odroczona akcja przed RemoveExistingProducts w skrypcie to błąd 2613;
+         ten sam GUID komponentu = plik nadpisany nowszą wersją, nie usunięty -->
+    <MajorUpgrade Schedule="afterInstallExecute" DowngradeErrorMessage="Nowsza wersja programu jest już zainstalowana." />
     <MediaTemplate EmbedCab="yes" />
     <Icon Id="app.ico" SourceFile="$(var.Root)\src\panel\res\app.ico" />
     <Property Id="ARPPRODUCTICON" Value="app.ico" />
@@ -29,9 +35,16 @@
       <ComponentGroupRef Id="Files" />
     </Feature>
 
+    <!-- EndSessionMessage: od 1.1.1 program kończy się sam (WM_ENDSESSION, CP-SB-20); TerminateProcess: reszta kopii
+         (1.1.0, sesje innych użytkowników) kończona po Timeout sekundach, bez żądania restartu -->
+    <util:CloseApplication Id="CloseSignBridge" Target="SignBridge.exe" EndSessionMessage="yes"
+                           TerminateProcess="1" RebootPrompt="no" Timeout="5" />
+
     <CustomAction Id="Configure" FileRef="AppExe" ExeCommand="--install-all --msi --quiet" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="Unconfigure" FileRef="AppExe" ExeCommand="--uninstall-all --msi --quiet" Execute="deferred" Impersonate="no" Return="ignore" />
     <InstallExecuteSequence>
+      <!-- przed RemoveFiles zamiast domyślnego „przed InstallFiles”: przy odinstalowaniu program też zamknięty, zanim plik zniknie -->
+      <Custom Action="override Wix4CloseApplications_X64" Before="RemoveFiles" Condition="VersionNT &gt; 400" />
       <Custom Action="Configure" After="InstallFiles" Condition="NOT (REMOVE~=&quot;ALL&quot;)" />
       <Custom Action="Unconfigure" After="InstallInitialize" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
     </InstallExecuteSequence>

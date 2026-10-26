@@ -67,6 +67,13 @@ bool ShouldShow(const std::wstring& latest, const Version& current, const std::w
                 ULONGLONG remindAfter, ULONGLONG now, Version& shown);
 ULONGLONG NowSeconds();
 
+// Pobrany instalator („SignBridge Installer.exe”) uruchomiony, gdy w tej sesji działa już SignBridge (CP-SB-20):
+// czy zamknąć działającą kopię i kontynuować jako instalator? Tak tylko, gdy działa zainstalowany program
+// (runningExe == installedExe, bez względu na wielkość liter), a instalator ma inną wersję niż zainstalowana.
+// Inaczej (drugi instalator, ta sama wersja) — jak dotąd: tylko pokaż działające okno.
+bool CloseRunningForInstall(bool installerFile, const std::wstring& runningExe, const std::wstring& installedExe,
+                            const std::wstring& installedVersion, const std::wstring& myVersion);
+
 // Czy sprawdzanie wyłączył administrator (HKLM, GPO)
 bool DisabledByPolicy();
 

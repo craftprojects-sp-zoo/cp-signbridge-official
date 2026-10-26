@@ -46,7 +46,7 @@ na komputerze budującym ustaw `$env:SB_SIGN_TIMESTAMP = "none"`.
 | Instalacja cicha | `msiexec /i "SignBridge.msi" /qn` |
 | Instalacja z paskiem postępu, bez pytań | `msiexec /i "SignBridge.msi" /qb` |
 | Instalacja z dziennikiem | `msiexec /i "SignBridge.msi" /qn /l*v C:\Temp\signbridge-install.log` |
-| Aktualizacja | ta sama komenda z nowszym MSI (wyższy numer wersji podmienia w miejscu) |
+| Aktualizacja | ta sama komenda z nowszym MSI (wyższy numer wersji podmienia w miejscu); od 1.1.1 pakiet sam zamyka działający SignBridge we wszystkich sesjach, bez restartu |
 | Odinstalowanie ciche | `msiexec /x "SignBridge.msi" /qn` |
 | Odinstalowanie bez pliku MSI | `msiexec /x {ProductCode} /qn` — kod z `Get-Package "SignBridge"` lub z HKLM\…\Uninstall |
 | Bez restartu, nawet gdy pliki były w użyciu | dodać `/norestart` (stare pliki znikają po najbliższym restarcie) |
